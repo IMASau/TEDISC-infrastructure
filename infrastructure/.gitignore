@@ -1,0 +1,17 @@
+# Local tofu/terraform state and caches
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Variable files with real values / secrets
+*.auto.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Credentials
+clouds.yaml
+*openrc*.sh

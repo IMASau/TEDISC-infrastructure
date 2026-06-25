@@ -1,0 +1,25 @@
+# Copy to terraform.tfvars and edit.
+
+# Authentication ------------------------------------------------------------
+# Either set os_cloud to a clouds.yaml entry, or leave it empty and `source`
+# your Nectar openrc.sh before running tofu.
+# os_cloud = "openstack"
+
+# Instance ------------------------------------------------------------------
+instance_name = "tedisc-vm"
+key_pair_name = "my-keypair" # must already exist in the project
+
+# Sizing --------------------------------------------------------------------
+# Pick a flavor by CPU/RAM...
+vcpus  = 2
+ram_mb = 8192
+# ...or pin an exact flavor name (overrides vcpus/ram_mb):
+# flavor_name = "m3.medium"
+
+# Image ---------------------------------------------------------------------
+image_name = "NeCTAR Ubuntu 22.04 LTS (Jammy) amd64"
+
+# Networking ----------------------------------------------------------------
+network_name     = "default"
+floating_ip_pool = "ext-net" # run `openstack network list --external` to find yours
+security_groups  = ["default"]
