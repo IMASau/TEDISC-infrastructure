@@ -24,6 +24,9 @@ image_name = "NeCTAR Ubuntu 22.04 LTS (Jammy) amd64"
 # gateway and the FIP pool. See `openstack network list --external`.
 external_network_name = "tasmania"
 security_groups       = ["default"]
+# CIDR(s) allowed to SSH in. The module creates an <instance_name>-ssh
+# security group and adds one tcp/22 ingress rule per entry.
+ssh_ingress_cidrs = ["131.217.0.0/16"]
 # Optional: override the private subnet range (default 192.168.100.0/24).
 # subnet_cidr = "192.168.100.0/24"
 # Pre-allocate the floating IP out-of-band so it survives destroy/recreate:

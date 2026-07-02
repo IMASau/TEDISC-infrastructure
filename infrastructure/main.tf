@@ -45,12 +45,28 @@ resource "openstack_networking_router_interface_v2" "vm" {
   subnet_id = openstack_networking_subnet_v2.vm.id
 }
 
+resource "openstack_networking_secgroup_v2" "ssh" {
+  name        = "${var.instance_name}-ssh"
+  description = "SSH ingress for ${var.instance_name}"
+}
+
+resource "openstack_networking_secgroup_rule_v2" "ssh" {
+  for_each          = toset(var.ssh_ingress_cidrs)
+  security_group_id = openstack_networking_secgroup_v2.ssh.id
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 22
+  port_range_max    = 22
+  remote_ip_prefix  = each.value
+}
+
 resource "openstack_compute_instance_v2" "vm" {
   name            = var.instance_name
   image_id        = data.openstack_images_image_v2.vm.id
   flavor_id       = data.openstack_compute_flavor_v2.vm.id
   key_pair        = var.key_pair_name
-  security_groups = var.security_groups
+  security_groups = concat(var.security_groups, [openstack_networking_secgroup_v2.ssh.name])
 
   network {
     uuid = openstack_networking_network_v2.vm.id

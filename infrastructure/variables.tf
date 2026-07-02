@@ -47,9 +47,15 @@ variable "key_pair_name" {
 }
 
 variable "security_groups" {
-  description = "Security groups to attach to the instance's port. Nectar projects come with a permissive-by-default \"default\" group; adjust rules there or supply your own group name(s)."
+  description = "Baseline security groups to attach to the instance's port, in addition to the SSH group this module creates. Nectar's \"default\" group allows intra-group traffic and full egress."
   type        = list(string)
   default     = ["default"]
+}
+
+variable "ssh_ingress_cidrs" {
+  description = "CIDR ranges allowed to reach tcp/22 on the instance. Materialised as rules on a dedicated <instance_name>-ssh security group."
+  type        = list(string)
+  default     = ["131.217.0.0/16"]
 }
 
 # --- Networking -------------------------------------------------------------
