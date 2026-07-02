@@ -13,46 +13,70 @@ data "openstack_compute_flavor_v2" "vm" {
   ram   = var.flavor_name == "" ? var.ram_mb : null
 }
 
-# The project network the instance's port lives on.
-data "openstack_networking_network_v2" "vm" {
-  name = var.network_name
+# Nectar's external (provider) network — the router's gateway and the pool the
+# floating IP was allocated from.
+data "openstack_networking_network_v2" "external" {
+  name     = var.external_network_name
+  external = true
+}
+
+# Private project network + subnet + router. All Terraform-owned so we can
+# destroy and recreate freely; the whitelisted IP lives on the floating IP
+# which is allocated out-of-band and referenced as a data source below.
+resource "openstack_networking_network_v2" "vm" {
+  name           = "${var.instance_name}-net"
+  admin_state_up = true
+}
+
+resource "openstack_networking_subnet_v2" "vm" {
+  name       = "${var.instance_name}-subnet"
+  network_id = openstack_networking_network_v2.vm.id
+  cidr       = var.subnet_cidr
+  ip_version = 4
+}
+
+resource "openstack_networking_router_v2" "vm" {
+  name                = "${var.instance_name}-router"
+  external_network_id = data.openstack_networking_network_v2.external.id
+}
+
+resource "openstack_networking_router_interface_v2" "vm" {
+  router_id = openstack_networking_router_v2.vm.id
+  subnet_id = openstack_networking_subnet_v2.vm.id
 }
 
 resource "openstack_compute_instance_v2" "vm" {
   name            = var.instance_name
+  image_id        = data.openstack_images_image_v2.vm.id
   flavor_id       = data.openstack_compute_flavor_v2.vm.id
   key_pair        = var.key_pair_name
   security_groups = var.security_groups
 
-  block_device {
-    uuid                  = data.openstack_images_image_v2.vm.id
-    source_type           = "image"
-    destination_type      = "local"
-    boot_index            = 0
-    delete_on_termination = true
+  network {
+    uuid = openstack_networking_network_v2.vm.id
   }
 
-  network {
-    uuid = data.openstack_networking_network_v2.vm.id
-  }
+  # The subnet must be joined to the router before boot, otherwise DHCP and
+  # metadata may not be reachable.
+  depends_on = [openstack_networking_router_interface_v2.vm]
 
   lifecycle {
-    # The image can be updated upstream without forcing a rebuild of a running VM.
-    ignore_changes = [block_device[0].uuid]
+    # Nectar can republish the image under the same name; don't rebuild the VM
+    # just because the upstream UUID changed.
+    ignore_changes = [image_id]
   }
 }
 
-# The floating IP is allocated out-of-band (e.g. `openstack floating ip create`)
-# so that it survives `tofu destroy` and stays valid for external whitelists.
-# We look it up here rather than owning it as a resource.
+# The pre-allocated floating IP. Owned out-of-band (`openstack floating ip
+# create <external_network>`) so the address survives destroy/recreate.
 data "openstack_networking_floatingip_v2" "vm" {
   address = var.floating_ip_address
 }
 
-# The neutron port that the instance created on the project network.
+# The neutron port nova created for the instance on the private network.
 data "openstack_networking_port_v2" "vm" {
   device_id  = openstack_compute_instance_v2.vm.id
-  network_id = data.openstack_networking_network_v2.vm.id
+  network_id = openstack_networking_network_v2.vm.id
 }
 
 # Bind the floating IP to the instance's port.

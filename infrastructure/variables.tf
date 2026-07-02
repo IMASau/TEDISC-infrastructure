@@ -47,20 +47,29 @@ variable "key_pair_name" {
 }
 
 variable "security_groups" {
-  description = "Security groups to attach to the instance."
+  description = "Security groups to attach to the instance's port. Nectar projects come with a permissive-by-default \"default\" group; adjust rules there or supply your own group name(s)."
   type        = list(string)
   default     = ["default"]
 }
 
 # --- Networking -------------------------------------------------------------
+# Nectar Advanced Networking: Terraform owns a private network, subnet, and
+# router in the project. The router's gateway is set to a Nectar zone network
+# (external_network_name), which is also the pool the floating IP is drawn
+# from. Only the floating IP is out-of-band so its address survives destroy.
 
-variable "network_name" {
-  description = "Name of the project network to attach the instance to."
+variable "external_network_name" {
+  description = "Name of Nectar's external network for the router gateway and the FIP pool (e.g. \"tasmania\", \"melbourne\", \"qld\"). Match your allocation's zone."
   type        = string
-  default     = "default"
+}
+
+variable "subnet_cidr" {
+  description = "CIDR range for the private project subnet. Internal only; any RFC1918 range works."
+  type        = string
+  default     = "192.168.100.0/24"
 }
 
 variable "floating_ip_address" {
-  description = "Pre-allocated floating IP address to attach to the instance. Allocate once with `openstack floating ip create <pool>` (or via the Nectar dashboard) so the address survives destroy/recreate cycles and stays valid for external whitelists."
+  description = "Pre-allocated floating IP to attach to the instance. Allocate once with `openstack floating ip create <external_network_name>` so it survives destroy/recreate and stays valid for external whitelists."
   type        = string
 }

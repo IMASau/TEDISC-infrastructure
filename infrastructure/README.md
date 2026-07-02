@@ -1,7 +1,9 @@
 # TEDISC infrastructure — Nectar VM (OpenTofu)
 
 Provisions a single virtual machine on [Nectar](https://nectar.org.au/) (OpenStack)
-with a static floating IP. CPU and RAM are configurable.
+using Nectar's Advanced Networking: a Terraform-owned private network, subnet,
+and router, plus an out-of-band floating IP that survives destroy/recreate so
+its address stays stable for external whitelists. CPU and RAM are configurable.
 
 ## Layout
 
@@ -10,7 +12,7 @@ with a static floating IP. CPU and RAM are configurable.
 | `versions.tf` | Required OpenTofu + provider versions |
 | `provider.tf` | OpenStack provider (auth from environment/clouds.yaml) |
 | `variables.tf` | Input variables |
-| `main.tf` | Instance, flavor/image lookup, floating IP |
+| `main.tf` | Network/subnet/router, instance, flavor/image lookup, floating IP |
 | `outputs.tf` | IP address, instance id, resolved flavor, etc. |
 | `terraform.tfvars.example` | Template for your settings |
 
@@ -21,11 +23,16 @@ with a static floating IP. CPU and RAM are configurable.
   **Application Credential** (Identity → Application Credentials) and download
   either the `clouds.yaml` or the `openrc.sh`.
 - An existing SSH **key pair** in the project (Compute → Key Pairs).
-- A pre-allocated **floating IP**. Terraform does *not* own the IP so that it
+- A pre-allocated **floating IP**. Terraform does *not* own the FIP, so it
   survives `tofu destroy` and stays valid for external whitelists. Allocate
-  once with `openstack floating ip create <pool>` (pool from
-  `openstack network list --external`), or via the Nectar dashboard, and
-  set the address in `terraform.tfvars` as `floating_ip_address`.
+  once from the same external network your allocation is in:
+
+  ```sh
+  openstack floating ip create tasmania
+  ```
+
+  Note the address it prints and set it in `terraform.tfvars` as
+  `floating_ip_address`.
 
 ## Authentication
 
@@ -40,19 +47,31 @@ Pick one:
 
 ```sh
 cp terraform.tfvars.example terraform.tfvars
-# edit terraform.tfvars: key_pair_name, floating_ip_address, vcpus, ram_mb, ...
+# edit terraform.tfvars: key_pair_name, external_network_name, floating_ip_address, ...
 
 tofu init
 tofu plan
 tofu apply
 ```
 
-After apply, the static IP is printed:
+After apply, the IP is printed:
 
 ```sh
 tofu output floating_ip
 tofu output ssh_command
 ```
+
+## What gets created
+
+- Private network `${instance_name}-net` and subnet `${instance_name}-subnet`
+  (default CIDR `192.168.100.0/24`, override with `subnet_cidr`).
+- Router `${instance_name}-router` with its external gateway set to the Nectar
+  zone network (`external_network_name`).
+- The VM, attached to the private network.
+- An association binding the pre-existing floating IP to the VM's port.
+
+`tofu destroy` tears down everything above **except** the floating IP itself.
+The next `tofu apply` reattaches the same IP.
 
 ## Sizing
 
@@ -64,12 +83,12 @@ set `flavor_name` directly (see `openstack flavor list`).
 ## Finding the right names
 
 ```sh
-openstack network list --external   # pool to allocate the floating IP from
+openstack network list --external   # -> external_network_name (your zone)
 openstack floating ip list          # -> floating_ip_address (after allocation)
-openstack network list              # -> network_name (your project network)
 openstack flavor list               # -> flavor_name / valid vcpus+ram combos
 openstack image list                # -> image_name
 openstack keypair list              # -> key_pair_name
+openstack security group list       # -> security_groups
 ```
 
 ## Destroy
@@ -78,9 +97,8 @@ openstack keypair list              # -> key_pair_name
 tofu destroy
 ```
 
-This tears down the VM and its floating-IP association, but leaves the
-floating IP allocated to the project so the same address can be reused on
-the next `tofu apply`. To release the IP entirely:
+Leaves the floating IP allocated to the project so the same address can be
+reused on the next `tofu apply`. To release it entirely:
 
 ```sh
 openstack floating ip delete <address>

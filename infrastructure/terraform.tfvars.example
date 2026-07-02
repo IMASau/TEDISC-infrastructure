@@ -20,9 +20,13 @@ ram_mb = 8192
 image_name = "NeCTAR Ubuntu 22.04 LTS (Jammy) amd64"
 
 # Networking ----------------------------------------------------------------
-network_name        = "default"
-security_groups     = ["default"]
+# The Nectar zone your allocation is in — used for both the router's external
+# gateway and the FIP pool. See `openstack network list --external`.
+external_network_name = "tasmania"
+security_groups       = ["default"]
+# Optional: override the private subnet range (default 192.168.100.0/24).
+# subnet_cidr = "192.168.100.0/24"
 # Pre-allocate the floating IP out-of-band so it survives destroy/recreate:
-#   openstack floating ip create <pool>   # <pool> from `openstack network list --external`
+#   openstack floating ip create tasmania
 # then pin the address here so it stays valid for external whitelists.
 floating_ip_address = "203.0.113.5"
