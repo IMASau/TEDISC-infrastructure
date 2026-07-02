@@ -20,6 +20,9 @@ ram_mb = 8192
 image_name = "NeCTAR Ubuntu 22.04 LTS (Jammy) amd64"
 
 # Networking ----------------------------------------------------------------
-network_name     = "default"
-floating_ip_pool = "ext-net" # run `openstack network list --external` to find yours
-security_groups  = ["default"]
+network_name        = "default"
+security_groups     = ["default"]
+# Pre-allocate the floating IP out-of-band so it survives destroy/recreate:
+#   openstack floating ip create <pool>   # <pool> from `openstack network list --external`
+# then pin the address here so it stays valid for external whitelists.
+floating_ip_address = "203.0.113.5"

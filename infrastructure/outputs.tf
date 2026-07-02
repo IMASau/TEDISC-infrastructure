@@ -23,10 +23,10 @@ output "flavor_specs" {
 
 output "floating_ip" {
   description = "Static/floating IP address assigned to the instance."
-  value       = openstack_networking_floatingip_v2.vm.address
+  value       = data.openstack_networking_floatingip_v2.vm.address
 }
 
 output "ssh_command" {
   description = "Convenience SSH command (adjust the username for your image)."
-  value       = "ssh ubuntu@${openstack_networking_floatingip_v2.vm.address}"
+  value       = "ssh ubuntu@${data.openstack_networking_floatingip_v2.vm.address}"
 }

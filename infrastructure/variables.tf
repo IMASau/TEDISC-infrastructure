@@ -60,7 +60,7 @@ variable "network_name" {
   default     = "default"
 }
 
-variable "floating_ip_pool" {
-  description = "Name of the external network/pool to allocate the static floating IP from (e.g. \"ext-net\", \"qld\", \"melbourne-qh2-uom\"). Check `openstack network list --external`."
+variable "floating_ip_address" {
+  description = "Pre-allocated floating IP address to attach to the instance. Allocate once with `openstack floating ip create <pool>` (or via the Nectar dashboard) so the address survives destroy/recreate cycles and stays valid for external whitelists."
   type        = string
 }

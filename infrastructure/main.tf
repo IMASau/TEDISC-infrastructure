@@ -42,10 +42,11 @@ resource "openstack_compute_instance_v2" "vm" {
   }
 }
 
-# Allocate a floating (static) IP from the external pool. This IP persists for
-# the life of the resource and survives instance reboots.
-resource "openstack_networking_floatingip_v2" "vm" {
-  pool = var.floating_ip_pool
+# The floating IP is allocated out-of-band (e.g. `openstack floating ip create`)
+# so that it survives `tofu destroy` and stays valid for external whitelists.
+# We look it up here rather than owning it as a resource.
+data "openstack_networking_floatingip_v2" "vm" {
+  address = var.floating_ip_address
 }
 
 # The neutron port that the instance created on the project network.
@@ -56,6 +57,6 @@ data "openstack_networking_port_v2" "vm" {
 
 # Bind the floating IP to the instance's port.
 resource "openstack_networking_floatingip_associate_v2" "vm" {
-  floating_ip = openstack_networking_floatingip_v2.vm.address
+  floating_ip = data.openstack_networking_floatingip_v2.vm.address
   port_id     = data.openstack_networking_port_v2.vm.id
 }
