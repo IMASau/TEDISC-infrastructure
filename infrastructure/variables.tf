@@ -58,6 +58,12 @@ variable "ssh_ingress_cidrs" {
   default     = ["131.217.0.0/16"]
 }
 
+variable "web_ingress_cidrs" {
+  description = "CIDR ranges allowed to reach tcp/80 and tcp/443 on the instance. Materialised as rules on a dedicated <instance_name>-web security group."
+  type        = list(string)
+  default     = ["131.217.0.0/16"]
+}
+
 # --- Networking -------------------------------------------------------------
 # Nectar Advanced Networking: Terraform owns a private network, subnet, and
 # router in the project. The router's gateway is set to a Nectar zone network

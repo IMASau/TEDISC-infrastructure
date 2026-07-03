@@ -61,12 +61,45 @@ resource "openstack_networking_secgroup_rule_v2" "ssh" {
   remote_ip_prefix  = each.value
 }
 
+resource "openstack_networking_secgroup_v2" "web" {
+  name        = "${var.instance_name}-web"
+  description = "HTTP/HTTPS ingress for ${var.instance_name}"
+}
+
+resource "openstack_networking_secgroup_rule_v2" "http" {
+  for_each          = toset(var.web_ingress_cidrs)
+  security_group_id = openstack_networking_secgroup_v2.web.id
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 80
+  port_range_max    = 80
+  remote_ip_prefix  = each.value
+}
+
+resource "openstack_networking_secgroup_rule_v2" "https" {
+  for_each          = toset(var.web_ingress_cidrs)
+  security_group_id = openstack_networking_secgroup_v2.web.id
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 443
+  port_range_max    = 443
+  remote_ip_prefix  = each.value
+}
+
 resource "openstack_compute_instance_v2" "vm" {
-  name            = var.instance_name
-  image_id        = data.openstack_images_image_v2.vm.id
-  flavor_id       = data.openstack_compute_flavor_v2.vm.id
-  key_pair        = var.key_pair_name
-  security_groups = concat(var.security_groups, [openstack_networking_secgroup_v2.ssh.name])
+  name      = var.instance_name
+  image_id  = data.openstack_images_image_v2.vm.id
+  flavor_id = data.openstack_compute_flavor_v2.vm.id
+  key_pair  = var.key_pair_name
+  security_groups = concat(
+    var.security_groups,
+    [
+      openstack_networking_secgroup_v2.ssh.name,
+      openstack_networking_secgroup_v2.web.name,
+    ],
+  )
 
   network {
     uuid = openstack_networking_network_v2.vm.id
