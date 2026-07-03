@@ -1,0 +1,13 @@
+---
+- name: Install Podman
+  apt:
+    name: "{{ podman_packages }}"
+    state: present
+    update_cache: yes
+
+- name: Enable podman socket for rootless usage
+  systemd:
+    name: podman.socket
+    state: started
+    enabled: yes
+    scope: system

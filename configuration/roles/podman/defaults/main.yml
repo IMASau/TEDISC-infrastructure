@@ -1,0 +1,5 @@
+---
+podman_packages:
+  - podman
+  - podman-docker
+  - containernetworking-plugins

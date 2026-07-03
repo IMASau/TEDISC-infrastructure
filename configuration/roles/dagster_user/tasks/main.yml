@@ -1,0 +1,19 @@
+---
+- name: Create dagster system user
+  user:
+    name: "{{ dagster_user }}"
+    shell: "{{ dagster_user_shell }}"
+    system: yes
+    create_home: yes
+    state: present
+
+- name: Create logind lingering directory
+  file:
+    path: "/var/lib/systemd/linger/{{ dagster_user }}"
+    state: touch
+    mode: '0644'
+
+- name: Enable lingering for dagster user
+  command:
+    cmd: loginctl enable-linger {{ dagster_user }}
+    creates: "/var/lib/systemd/linger/{{ dagster_user }}"

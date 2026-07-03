@@ -1,0 +1,4 @@
+---
+caddy_reverse_proxy_port: 8080
+caddy_domain: example.com
+caddy_email: admin@example.com
