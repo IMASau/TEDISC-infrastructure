@@ -9,15 +9,24 @@
 #   * a Caddy reverse-proxy block for <subdomain> -> localhost:<port>
 #
 # Fields per entry:
-#   name       required, unique short slug (used for compose project,
-#              checkout dir, systemd instance name, container/volume prefix)
-#   repo       required, git URL to clone (HTTPS for public repos)
-#   branch     optional, defaults to "main"
-#   port       required, host-side port the webserver is mapped to
-#   subdomain  required, FQDN Caddy serves TLS for
-#   env        optional, map of non-secret vars written to .env
-#   secrets    optional, map of env-var-name -> Barbican secret name
-#              (fetched at play time via the openstack_secret lookup)
+#   name             required, unique short slug (used for compose project,
+#                    checkout dir, systemd instance name, container/volume prefix)
+#   repo             required, git URL to clone (HTTPS for public repos)
+#   branch           optional, defaults to "main"
+#   port             required, host-side port the webserver is mapped to
+#   subdomain        required, FQDN Caddy serves TLS for
+#   env              optional, map of non-secret vars written to .env
+#   secrets          optional, map of env-var-name -> Barbican secret name
+#                    (fetched at play time via the openstack_secret lookup)
+#   user_code_image  optional, overrides the compose-default USER_CODE_IMAGE
+#                    tag (e.g. "ghcr.io/owner/tedisc-user-code:v1.2.3" to
+#                    pull instead of build)
+#   dagster_image    optional, overrides the compose-default DAGSTER_IMAGE
+#                    tag used by the webserver and daemon services
+#   deploy_mode      optional, "git" (default) or "registry" — how
+#                    deploy-update.sh keeps the stack current
+#   docker_network   optional, overrides the default network name
+#                    (${name}_default); rarely needed
 #
 # Example:
 # dagster_instances:
