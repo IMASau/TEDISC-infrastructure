@@ -87,8 +87,8 @@ variable "floating_ip_address" {
 }
 
 # --- DNS --------------------------------------------------------------------
-# Optional: register an A record in a Nectar Designate zone. Leave dns_zone_name
-# empty to skip DNS entirely.
+# Optional: register one or more A records in a Nectar Designate zone. Leave
+# dns_zone_name empty (or dns_hostnames empty) to skip DNS entirely.
 
 variable "dns_zone_name" {
   description = "Designate DNS zone to register in, including the trailing dot (e.g. \"myproject.cloud.edu.au.\"). Leave empty to skip DNS."
@@ -96,14 +96,14 @@ variable "dns_zone_name" {
   default     = ""
 }
 
-variable "dns_hostname" {
-  description = "Leaf hostname within dns_zone_name (e.g. \"dagster\"). Combined with the zone to form the FQDN. Ignored when dns_zone_name is empty."
-  type        = string
-  default     = ""
+variable "dns_hostnames" {
+  description = "Leaf hostnames within dns_zone_name (e.g. [\"dagster\", \"*.dagster\"]). Each entry becomes an A record pointing at the floating IP. Wildcards are permitted. Ignored when dns_zone_name is empty."
+  type        = list(string)
+  default     = []
 }
 
 variable "dns_ttl" {
-  description = "TTL (seconds) for the DNS A record."
+  description = "TTL (seconds) for the DNS A records."
   type        = number
   default     = 300
 }

@@ -38,8 +38,9 @@ web_ingress_cidrs = ["131.217.0.0/16"]
 floating_ip_address = "203.0.113.5"
 
 # DNS -----------------------------------------------------------------------
-# Optional: register an A record in Nectar's Designate DNS. Leave dns_zone_name
-# empty (the default) to skip. Include the trailing dot on the zone name.
+# Optional: register A record(s) in Nectar's Designate DNS. Leave dns_zone_name
+# empty (the default) to skip DNS. Include the trailing dot on the zone name.
+# Wildcard leaves are permitted, e.g. "*.dagster" → *.dagster.myproject....
 # dns_zone_name = "myproject.cloud.edu.au."
-# dns_hostname  = "dagster"
+# dns_hostnames = ["dagster", "*.dagster"]
 # dns_ttl       = 300

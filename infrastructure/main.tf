@@ -134,17 +134,17 @@ resource "openstack_networking_floatingip_associate_v2" "vm" {
   port_id     = data.openstack_networking_port_v2.vm.id
 }
 
-# Optional Designate A record pointing at the floating IP. Turned on by setting
-# dns_zone_name (and dns_hostname) in tfvars.
+# Optional Designate A records pointing at the floating IP. Turned on by
+# setting dns_zone_name and one or more entries in dns_hostnames.
 data "openstack_dns_zone_v2" "vm" {
   count = var.dns_zone_name == "" ? 0 : 1
   name  = var.dns_zone_name
 }
 
 resource "openstack_dns_recordset_v2" "vm" {
-  count       = var.dns_zone_name == "" ? 0 : 1
+  for_each    = var.dns_zone_name == "" ? toset([]) : toset(var.dns_hostnames)
   zone_id     = data.openstack_dns_zone_v2.vm[0].id
-  name        = "${var.dns_hostname}.${var.dns_zone_name}"
+  name        = "${each.value}.${var.dns_zone_name}"
   description = "A record for ${var.instance_name}"
   ttl         = var.dns_ttl
   type        = "A"
