@@ -1,4 +1,45 @@
 ---
-caddy_reverse_proxy_port: 8080
-caddy_domain: example.com
-caddy_email: admin@example.com
+# Caddy ACME email for cert expiry warnings. Optional.
+# caddy_email: ops@example.com
+
+# List of Dagster instances to deploy on the host. Each entry becomes:
+#   * a checkout at ~dagster/dagster-instances/<name>/
+#   * per-instance systemd units `tedisc@<name>.service` and
+#     `tedisc-deploy@<name>.timer`
+#   * a Caddy reverse-proxy block for <subdomain> -> localhost:<port>
+#
+# Fields per entry:
+#   name       required, unique short slug (used for compose project,
+#              checkout dir, systemd instance name, container/volume prefix)
+#   repo       required, git URL to clone (HTTPS for public repos)
+#   branch     optional, defaults to "main"
+#   port       required, host-side port the webserver is mapped to
+#   subdomain  required, FQDN Caddy serves TLS for
+#   env        optional, map of non-secret vars written to .env
+#   secrets    optional, map of env-var-name -> Barbican secret name
+#              (fetched at play time via the openstack_secret lookup)
+#
+# Example:
+# dagster_instances:
+#   - name: d1
+#     repo: https://github.com/eloisewm/TEDISC-Dagster.git
+#     port: 3004
+#     subdomain: d1.dagster.ore-tedisc.cloud.edu.au
+#     env:
+#       BLA_FILEPATH: /opt/dagster/app/Datasets/BirdLifeAustralia/bla_output_csiro_290525.csv
+#       DB_HOST: testimasag3.its.utas.edu.au
+#       DB_PORT: '1433'
+#       DB_NAME: IMASOREMonitoring
+#       DB_DRIVER: ODBC Driver 18 for SQL Server
+#     secrets:
+#       DAGSTER_POSTGRES_PASSWORD: d1_dagster_postgres_password
+#       DB_USER: d1_db_user
+#       DB_PASSWORD: d1_db_password
+#   - name: d2
+#     repo: https://github.com/eloisewm/TEDISC-Dagster.git
+#     branch: staging
+#     port: 3008
+#     subdomain: d2.dagster.ore-tedisc.cloud.edu.au
+#     # env / secrets ...
+
+dagster_instances: []

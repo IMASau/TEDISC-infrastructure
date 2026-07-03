@@ -1,13 +1,38 @@
 ---
 - name: Install Podman
-  apt:
+  ansible.builtin.apt:
     name: "{{ podman_packages }}"
     state: present
-    update_cache: yes
+    update_cache: true
 
-- name: Enable podman socket for rootless usage
-  systemd:
+# The rest of this file wires up the *rootless* podman socket for the
+# dagster user. Assumes dagster_user has already run (user exists and
+# linger is enabled); ordering is enforced by playbooks/site.yml.
+
+- name: Look up dagster user UID
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ dagster_user }}"
+
+- name: Set dagster_user_uid fact
+  ansible.builtin.set_fact:
+    dagster_user_uid: "{{ getent_passwd[dagster_user][1] }}"
+
+# Linger creates the account file but doesn't start user@<uid>.service until
+# the next boot. Start it now so `systemctl --user` calls below can talk to
+# a running per-user manager.
+- name: Ensure dagster user's systemd manager is running
+  ansible.builtin.systemd:
+    name: "user@{{ dagster_user_uid }}.service"
+    state: started
+
+- name: Enable podman user socket for dagster user
+  become_user: "{{ dagster_user }}"
+  ansible.builtin.systemd:
     name: podman.socket
     state: started
-    enabled: yes
-    scope: system
+    enabled: true
+    scope: user
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ dagster_user_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ dagster_user_uid }}/bus"

@@ -1,5 +1,5 @@
 ---
 caddy_version: latest
-caddy_reverse_proxy_port: 8080
-caddy_domain: example.com
-caddy_email: admin@example.com
+# Email address for ACME (Let's Encrypt) — used for expiry warnings. Leave
+# empty to omit; Caddy will still provision certs without one.
+caddy_email: ""

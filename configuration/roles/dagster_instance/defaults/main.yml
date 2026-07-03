@@ -1,0 +1,8 @@
+---
+# Parent directory that every instance's checkout lives under, on the target
+# host, as the dagster user.
+dagster_instances_root: "/home/{{ dagster_user }}/dagster-instances"
+
+# List of instances to deploy. See group_vars for the expected shape; empty
+# by default so a play with no user config makes no changes here.
+dagster_instances: []

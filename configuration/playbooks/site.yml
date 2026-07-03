@@ -1,8 +1,9 @@
 ---
 - name: Configure server
   hosts: all
-  become: yes
+  become: true
   roles:
     - dagster_user
     - podman
+    - dagster_instance
     - caddy

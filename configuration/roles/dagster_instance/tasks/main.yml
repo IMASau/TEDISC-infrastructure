@@ -1,0 +1,71 @@
+---
+- name: Look up dagster user UID
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ dagster_user }}"
+
+- name: Set dagster_user_uid fact
+  ansible.builtin.set_fact:
+    dagster_user_uid: "{{ getent_passwd[dagster_user][1] }}"
+
+- name: Ensure the instances root exists
+  ansible.builtin.file:
+    path: "{{ dagster_instances_root }}"
+    state: directory
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0755'
+
+- name: Ensure the user's systemd unit directory exists
+  ansible.builtin.file:
+    path: "/home/{{ dagster_user }}/.config/systemd/user"
+    state: directory
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0755'
+
+# First pass: clone every instance's repo. The systemd unit files come from
+# one of these checkouts (they're identical across repos per the multi-
+# instance contract), so all clones must complete before we install them.
+- name: Clone each dagster instance
+  become_user: "{{ dagster_user }}"
+  ansible.builtin.git:
+    repo: "{{ instance.repo }}"
+    dest: "{{ dagster_instances_root }}/{{ instance.name }}"
+    version: "{{ instance.branch | default('main') }}"
+    update: false     # deploy-update.sh handles subsequent pulls
+    accept_hostkey: true
+  loop: "{{ dagster_instances }}"
+  loop_control:
+    loop_var: instance
+    label: "{{ instance.name }}"
+
+# Install the templated systemd units (per the contract, every instance
+# repo ships identical copies at scripts/tedisc*@.service/timer). Take the
+# first instance's checkout as the canonical source.
+- name: Install shared systemd unit templates
+  ansible.builtin.copy:
+    src: "{{ dagster_instances_root }}/{{ dagster_instances[0].name }}/scripts/{{ item }}"
+    dest: "/home/{{ dagster_user }}/.config/systemd/user/{{ item }}"
+    remote_src: true
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0644'
+  loop:
+    - "tedisc@.service"
+    - "tedisc-deploy@.service"
+    - "tedisc-deploy@.timer"
+  when: dagster_instances | length > 0
+  notify: reload dagster user systemd
+
+# Flush the daemon-reload before per-instance enables so the user manager
+# has seen the new unit files.
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Provision each instance
+  ansible.builtin.include_tasks: instance.yml
+  loop: "{{ dagster_instances }}"
+  loop_control:
+    loop_var: instance
+    label: "{{ instance.name }}"

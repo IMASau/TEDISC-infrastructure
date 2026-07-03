@@ -1,0 +1,32 @@
+---
+- name: "[{{ instance.name }}] Write .env file"
+  become_user: "{{ dagster_user }}"
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ dagster_instances_root }}/{{ instance.name }}/.env"
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0600'
+
+- name: "[{{ instance.name }}] Enable & start tedisc@{{ instance.name }}.service"
+  become_user: "{{ dagster_user }}"
+  ansible.builtin.systemd:
+    name: "tedisc@{{ instance.name }}.service"
+    state: started
+    enabled: true
+    scope: user
+    daemon_reload: true
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ dagster_user_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ dagster_user_uid }}/bus"
+
+- name: "[{{ instance.name }}] Enable & start tedisc-deploy@{{ instance.name }}.timer"
+  become_user: "{{ dagster_user }}"
+  ansible.builtin.systemd:
+    name: "tedisc-deploy@{{ instance.name }}.timer"
+    state: started
+    enabled: true
+    scope: user
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ dagster_user_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ dagster_user_uid }}/bus"

@@ -1,0 +1,9 @@
+---
+- name: reload dagster user systemd
+  become_user: "{{ dagster_user }}"
+  ansible.builtin.systemd:
+    daemon_reload: true
+    scope: user
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ dagster_user_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ dagster_user_uid }}/bus"

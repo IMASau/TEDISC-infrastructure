@@ -1,3 +1,10 @@
-{{ caddy_domain }} {
-    reverse_proxy localhost:{{ caddy_reverse_proxy_port }}
+{% if caddy_email %}
+{
+    email {{ caddy_email }}
 }
+{% endif %}
+{% for instance in dagster_instances %}
+{{ instance.subdomain }} {
+    reverse_proxy localhost:{{ instance.port }}
+}
+{% endfor %}
