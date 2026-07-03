@@ -36,3 +36,10 @@ web_ingress_cidrs = ["131.217.0.0/16"]
 #   openstack floating ip create tasmania
 # then pin the address here so it stays valid for external whitelists.
 floating_ip_address = "203.0.113.5"
+
+# DNS -----------------------------------------------------------------------
+# Optional: register an A record in Nectar's Designate DNS. Leave dns_zone_name
+# empty (the default) to skip. Include the trailing dot on the zone name.
+# dns_zone_name = "myproject.cloud.edu.au."
+# dns_hostname  = "dagster"
+# dns_ttl       = 300

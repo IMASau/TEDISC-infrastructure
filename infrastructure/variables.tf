@@ -85,3 +85,25 @@ variable "floating_ip_address" {
   description = "Pre-allocated floating IP to attach to the instance. Allocate once with `openstack floating ip create <external_network_name>` so it survives destroy/recreate and stays valid for external whitelists."
   type        = string
 }
+
+# --- DNS --------------------------------------------------------------------
+# Optional: register an A record in a Nectar Designate zone. Leave dns_zone_name
+# empty to skip DNS entirely.
+
+variable "dns_zone_name" {
+  description = "Designate DNS zone to register in, including the trailing dot (e.g. \"myproject.cloud.edu.au.\"). Leave empty to skip DNS."
+  type        = string
+  default     = ""
+}
+
+variable "dns_hostname" {
+  description = "Leaf hostname within dns_zone_name (e.g. \"dagster\"). Combined with the zone to form the FQDN. Ignored when dns_zone_name is empty."
+  type        = string
+  default     = ""
+}
+
+variable "dns_ttl" {
+  description = "TTL (seconds) for the DNS A record."
+  type        = number
+  default     = 300
+}

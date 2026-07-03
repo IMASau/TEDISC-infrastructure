@@ -26,7 +26,12 @@ output "floating_ip" {
   value       = data.openstack_networking_floatingip_v2.vm.address
 }
 
+output "fqdn" {
+  description = "FQDN registered in Designate, or empty string if DNS is disabled."
+  value       = var.dns_zone_name == "" ? "" : trimsuffix("${var.dns_hostname}.${var.dns_zone_name}", ".")
+}
+
 output "ssh_command" {
   description = "Convenience SSH command (adjust the username for your image)."
-  value       = "ssh ubuntu@${data.openstack_networking_floatingip_v2.vm.address}"
+  value       = "ssh ubuntu@${var.dns_zone_name == "" ? data.openstack_networking_floatingip_v2.vm.address : trimsuffix("${var.dns_hostname}.${var.dns_zone_name}", ".")}"
 }
