@@ -1,0 +1,15 @@
+---
+# Base packages Ansible itself needs on a minimal Nectar Ubuntu image before
+# any other role can safely run. Kept intentionally tiny — actual services
+# live in their own roles.
+
+- name: Ensure Ansible prerequisites are installed
+  ansible.builtin.apt:
+    name:
+      # Provides `setfacl` — Ansible needs POSIX ACLs to hand temp files off
+      # to unprivileged users when using `become_user`. Without it,
+      # `become_user: <non-root>` fails on minimal images.
+      - acl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600

@@ -3,6 +3,7 @@
   hosts: all
   become: true
   roles:
+    - bootstrap
     - dagster_user
     - podman
     - dagster_instance
