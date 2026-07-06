@@ -1,0 +1,112 @@
+---
+- name: Ensure lego is enabled correctly
+  ansible.builtin.assert:
+    that:
+      - lego_domains | length > 0
+      - lego_email | length > 0
+      - lego_appcred_id_secret_name | length > 0
+      - lego_appcred_secret_secret_name | length > 0
+    fail_msg: >-
+      lego role needs lego_domains, lego_email, and both
+      lego_appcred_*_secret_name variables set. See group_vars/all.yml.
+
+- name: Check installed lego version
+  ansible.builtin.command: "{{ lego_binary_path }} -v"
+  register: lego_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download and extract lego binary
+  ansible.builtin.unarchive:
+    src: "{{ lego_binary_url }}"
+    dest: /usr/local/bin
+    remote_src: true
+    include:
+      - lego
+    owner: root
+    group: root
+    mode: '0755'
+  when: lego_version not in (lego_installed.stdout | default(''))
+
+- name: Ensure lego runtime directory exists
+  ansible.builtin.file:
+    path: "{{ lego_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# `2750` sets the setgid bit so new files inherit the group, and gives the
+# group read + traverse. Combined with the chgrp/chmod in lego-run.sh, this
+# is enough for the consuming service to open the certs.
+- name: Ensure lego certificate directory exists
+  ansible.builtin.file:
+    path: "{{ lego_cert_dir }}"
+    state: directory
+    owner: root
+    group: "{{ lego_cert_group }}"
+    mode: '2750'
+
+- name: Ensure /etc/lego exists
+  ansible.builtin.file:
+    path: "{{ lego_env_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install lego renewal wrapper script
+  ansible.builtin.copy:
+    src: lego-run.sh
+    dest: /usr/local/bin/lego-run.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Template lego env file (config + creds fetched from Barbican)
+  ansible.builtin.template:
+    src: lego.env.j2
+    dest: "{{ lego_env_file }}"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Install lego systemd service
+  ansible.builtin.template:
+    src: lego.service.j2
+    dest: /etc/systemd/system/lego.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload systemd
+
+- name: Install lego systemd renewal timer
+  ansible.builtin.template:
+    src: lego.timer.j2
+    dest: /etc/systemd/system/lego.timer
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload systemd
+
+# Flush handlers so daemon-reload happens before we try to start the units.
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+# Look for the wildcard cert's presumed filename (lego encodes '*' as '_').
+- name: Check whether a cert has ever been issued
+  ansible.builtin.stat:
+    path: "{{ lego_cert_dir }}/{{ lego_domains[0] | regex_replace('^\\*', '_') }}.crt"
+  register: lego_cert_stat
+
+- name: Trigger initial cert issuance
+  ansible.builtin.systemd:
+    name: lego.service
+    state: started
+  when: not lego_cert_stat.stat.exists
+
+- name: Enable and start the renewal timer
+  ansible.builtin.systemd:
+    name: lego.timer
+    state: started
+    enabled: true

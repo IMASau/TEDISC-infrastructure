@@ -11,62 +11,19 @@
     state: started
     enabled: true
 
-# --- DNS-01: Caddy binary with the Designate module ------------------------
-# The apt package ships a stock Caddy without third-party DNS providers.
-# Download a version-latest binary with the requested provider baked in
-# from Caddy's official download builder, and use a systemd drop-in to
-# point the caddy.service at it. The download is idempotent — skipped when
-# the module is already present in the on-disk binary.
-
-- name: Check if custom Caddy binary already has the DNS module
-  ansible.builtin.command: /usr/local/bin/caddy list-modules
-  register: caddy_modules
-  changed_when: false
-  failed_when: false
-  when: caddy_dns_challenge
-
-- name: Download Caddy with the DNS-provider module
-  ansible.builtin.get_url:
-    url: "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com/caddy-dns/{{ caddy_dns_provider }}"
-    dest: /usr/local/bin/caddy
-    mode: '0755'
-    force: true
-  when:
-    - caddy_dns_challenge
-    - "'dns.providers.' + caddy_dns_provider not in (caddy_modules.stdout | default(''))"
-  notify: restart caddy
-
-- name: Ensure Caddy systemd drop-in directory exists
+# If a previous run of this role installed the DNS-01 systemd drop-in (from
+# the abandoned caddy-dns/designate approach), remove it now — the current
+# design keeps stock apt Caddy and consumes lego's cert files instead.
+- name: Remove old DNS-01 systemd drop-in for Caddy (if present)
   ansible.builtin.file:
-    path: /etc/systemd/system/caddy.service.d
-    state: directory
-    mode: '0755'
-  when: caddy_dns_challenge
-
-- name: Install systemd drop-in for custom Caddy binary + openstack env
-  ansible.builtin.copy:
-    dest: /etc/systemd/system/caddy.service.d/override.conf
-    content: |
-      [Service]
-      # Replace the apt-shipped binary path with our custom-built one.
-      ExecStart=
-      ExecStart=/usr/local/bin/caddy run --environ --config /etc/caddy/Caddyfile
-      ExecReload=
-      ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
-      # Env file supplies OS_* credentials for the DNS-01 challenge.
-      EnvironmentFile=/etc/caddy/openstack.env
-    mode: '0644'
-  when: caddy_dns_challenge
+    path: /etc/systemd/system/caddy.service.d/override.conf
+    state: absent
   notify: restart caddy
 
-- name: Template OpenStack env file (Designate creds via Barbican)
-  ansible.builtin.template:
-    src: openstack.env.j2
-    dest: /etc/caddy/openstack.env
-    owner: root
-    group: caddy
-    mode: '0640'
-  when: caddy_dns_challenge
+- name: Remove old openstack env file for Caddy (if present)
+  ansible.builtin.file:
+    path: /etc/caddy/openstack.env
+    state: absent
   notify: restart caddy
 
 - name: Deploy Caddyfile

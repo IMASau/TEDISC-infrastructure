@@ -7,4 +7,5 @@
     - dagster_user
     - podman
     - dagster_instance
+    - lego
     - caddy

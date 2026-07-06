@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily ACME cert renewal check via lego
+
+[Timer]
+OnCalendar=daily
+# Spread the load if we ever run this on many boxes, and avoid every
+# machine's ACME hitting the DNS provider at the same instant.
+RandomizedDelaySec=1h
+# Catch up on a missed run if the box was down at the scheduled time.
+Persistent=true
+Unit=lego.service
+
+[Install]
+WantedBy=timers.target

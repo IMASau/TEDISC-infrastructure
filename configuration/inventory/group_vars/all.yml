@@ -64,6 +64,22 @@
 #     subdomain: d2.dagster.ore-tedisc.cloud.edu.au
 #     # env / secrets ...
 
+# --- ACME via lego + OpenStack Designate DNS-01 -----------------------------
+# Caddy consumes cert files that lego writes to disk. lego renews via a
+# daily systemd timer. See configuration/README.md for the one-time
+# application credential setup.
+lego_email: mark@condense.com.au
+lego_domains: ["*.dagster.ore-tedisc.cloud.edu.au"]
+lego_openstack_auth_url: "https://keystone.rc.nectar.org.au/v3/"
+lego_openstack_region: "Melbourne"
+lego_appcred_id_secret_name: caddy_appcred_id
+lego_appcred_secret_secret_name: caddy_appcred_secret
+
+# Cert filenames use '_' in place of '*' — this matches lego's wildcard
+# encoding. If lego_domains changes, update the stem here.
+caddy_cert_file: "/var/lib/lego/certificates/_.dagster.ore-tedisc.cloud.edu.au.crt"
+caddy_key_file: "/var/lib/lego/certificates/_.dagster.ore-tedisc.cloud.edu.au.key"
+
 dagster_instances:
   - name: ore
     repo: https://github.com/eloisewm/TEDISC-Dagster.git

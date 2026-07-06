@@ -1,0 +1,42 @@
+---
+# Version pinned to a specific release. Bump manually — releases live at
+# https://github.com/go-acme/lego/releases.
+lego_version: "4.20.4"
+lego_binary_arch: linux_amd64
+lego_binary_url: "https://github.com/go-acme/lego/releases/download/v{{ lego_version }}/lego_v{{ lego_version }}_{{ lego_binary_arch }}.tar.gz"
+lego_binary_path: /usr/local/bin/lego
+
+# On-disk layout.
+lego_path: /var/lib/lego
+lego_cert_dir: "{{ lego_path }}/certificates"
+lego_env_file: /etc/lego/env
+
+# Cert files are made readable by this group so the consuming service can
+# open them. Caddy's apt package creates a `caddy` user + group.
+lego_cert_group: caddy
+
+# Service to reload after cert issuance/renewal so it picks up the new
+# files. Empty string disables the reload.
+lego_reload_service: caddy
+
+# ACME contact.
+lego_email: ""
+
+# DNS provider (see https://go-acme.github.io/lego/dns/).
+lego_dns_provider: designate
+
+# Domain(s) on the cert. Wildcards are permitted — lego encodes '*' as '_'
+# in the resulting filename (`*.foo.example.com` → `_.foo.example.com.crt`).
+lego_domains: []
+
+# Days-until-expiry threshold at which the renewal timer actually renews.
+lego_renew_days: 30
+
+# OpenStack auth for lego's Designate provider.
+lego_openstack_auth_url: "https://keystone.rc.nectar.org.au/v3/"
+lego_openstack_region: "Melbourne"
+
+# Barbican secret names holding the application credential id / secret.
+# Required when lego is enabled — otherwise the env-file template will fail.
+lego_appcred_id_secret_name: ""
+lego_appcred_secret_secret_name: ""
