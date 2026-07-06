@@ -51,4 +51,19 @@
 #     subdomain: d2.dagster.ore-tedisc.cloud.edu.au
 #     # env / secrets ...
 
-dagster_instances: []
+dagster_instances:
+  - name: ore
+    repo: https://github.com/eloisewm/TEDISC-Dagster.git
+    port: 3004
+    subdomain: ore.dagster.ore-tedisc.cloud.edu.au
+    env:
+      BLA_FILEPATH: /opt/dagster/app/Datasets/BirdLifeAustralia/bla_output_csiro_290525.csv
+      DB_HOST: testimasag3.its.utas.edu.au
+      DB_PORT: '1433'
+      DB_NAME: IMASOREMonitoring
+      DB_DRIVER: ODBC Driver 18 for SQL Server
+    secrets:
+      DAGSTER_POSTGRES_PASSWORD: ore_dagster_postgres_password
+      DB_USER: ore_db_user
+      DB_PASSWORD: ore_db_password
+# Later; name: mh or macharbour

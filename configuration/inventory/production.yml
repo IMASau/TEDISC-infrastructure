@@ -2,7 +2,7 @@
 all:
   hosts:
     server:
-      ansible_host: 127.0.0.1
-      ansible_user: root
+      ansible_host: dagster.ore-tedisc.cloud.edu.au
+      ansible_user: ubuntu
   vars:
     ansible_python_interpreter: /usr/bin/python3
