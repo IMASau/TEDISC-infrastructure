@@ -13,3 +13,15 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+
+# When Ansible first creates /root/.ansible/tmp on its own it uses mode 0700,
+# which stops non-root become_user tasks from traversing into per-task
+# subdirs. Create it up-front with a traversable mode so ACLs on the leaf
+# files (handled by the `acl` package above) are enough.
+- name: Pre-create root's Ansible temp dir with traversable permissions
+  ansible.builtin.file:
+    path: /root/.ansible/tmp
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
