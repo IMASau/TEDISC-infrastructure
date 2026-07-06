@@ -1,3 +1,10 @@
 ---
 dagster_user: dagster
 dagster_user_shell: /bin/bash
+
+# Subordinate UID/GID range for rootless podman. `useradd --system` skips
+# this allocation, so we do it explicitly. The range is chosen well above
+# Ubuntu's default auto-allocation window (100000 upwards) to avoid
+# collisions on hosts that also have regular non-system users.
+dagster_subuid_range: "500000-565535"
+dagster_subgid_range: "500000-565535"

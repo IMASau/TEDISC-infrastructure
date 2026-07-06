@@ -1,0 +1,10 @@
+---
+# Fires when the subuid/subgid range for the dagster user is newly added.
+# Podman needs to migrate its local storage to use the new ID mappings;
+# on a fresh box (no images pulled yet) this is a no-op, but it makes
+# subsequent pulls/builds actually succeed.
+- name: reinitialise podman storage
+  become_user: "{{ dagster_user }}"
+  ansible.builtin.shell: >
+    XDG_RUNTIME_DIR=/run/user/$(id -u)
+    podman system migrate

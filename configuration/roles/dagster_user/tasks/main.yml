@@ -1,19 +1,36 @@
 ---
 - name: Create dagster system user
-  user:
+  ansible.builtin.user:
     name: "{{ dagster_user }}"
     shell: "{{ dagster_user_shell }}"
-    system: yes
-    create_home: yes
+    system: true
+    create_home: true
     state: present
 
-- name: Create logind lingering directory
-  file:
-    path: "/var/lib/systemd/linger/{{ dagster_user }}"
-    state: touch
-    mode: '0644'
-
+# `loginctl enable-linger` creates /var/lib/systemd/linger/<user> as a side
+# effect *and* notifies systemd-logind so it starts user@<uid>.service
+# immediately, without waiting for a reboot. The `creates:` guard makes this
+# idempotent: subsequent runs see the file and skip.
 - name: Enable lingering for dagster user
-  command:
-    cmd: loginctl enable-linger {{ dagster_user }}
+  ansible.builtin.command:
+    cmd: "loginctl enable-linger {{ dagster_user }}"
     creates: "/var/lib/systemd/linger/{{ dagster_user }}"
+
+# useradd --system skips /etc/subuid + /etc/subgid, so we allocate ranges
+# explicitly here — rootless podman needs them to map container UIDs/GIDs
+# (0..65535) into the host user namespace.
+- name: Check for existing dagster subuid entry
+  ansible.builtin.command: "grep -q '^{{ dagster_user }}:' /etc/subuid"
+  register: dagster_subuid_present
+  changed_when: false
+  failed_when: false
+
+- name: Allocate subuid + subgid range for dagster user
+  ansible.builtin.command:
+    cmd: >-
+      usermod
+      --add-subuids {{ dagster_subuid_range }}
+      --add-subgids {{ dagster_subgid_range }}
+      {{ dagster_user }}
+  when: dagster_subuid_present.rc != 0
+  notify: reinitialise podman storage
