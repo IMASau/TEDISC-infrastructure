@@ -3,3 +3,25 @@ caddy_version: latest
 # Email address for ACME (Let's Encrypt) — used for expiry warnings. Leave
 # empty to omit; Caddy will still provision certs without one.
 caddy_email: ""
+
+# --- DNS-01 ACME challenge (via OpenStack Designate) -----------------------
+# Set true to switch ACME from HTTP-01/TLS-ALPN-01 to DNS-01. This lets
+# certs issue against domains whose HTTP/HTTPS ports aren't reachable from
+# the ACME validator — e.g. when web_ingress_cidrs restricts to an internal
+# range. Requires an OpenStack application credential with permission to
+# write records in dns_zone_name (stored in Barbican; see the two _secret_name
+# vars below).
+caddy_dns_challenge: false
+
+# libdns/caddy-dns provider name. `designate` is the OpenStack one.
+caddy_dns_provider: designate
+
+# Where Caddy authenticates. Nectar's Keystone endpoint by default.
+caddy_openstack_auth_url: "https://keystone.rc.nectar.org.au/v3/"
+# Region hosting the Designate endpoint. Check with `openstack region list`.
+caddy_openstack_region: "Melbourne"
+
+# Barbican secret names holding the application credential id / secret.
+# Required when caddy_dns_challenge is true.
+caddy_appcred_id_secret_name: ""
+caddy_appcred_secret_secret_name: ""

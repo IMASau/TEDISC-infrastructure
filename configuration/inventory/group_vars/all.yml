@@ -2,6 +2,19 @@
 # Caddy ACME email for cert expiry warnings. Optional.
 # caddy_email: ops@example.com
 
+# --- Caddy DNS-01 challenge --------------------------------------------------
+# Turn this on when Caddy's public IP is firewalled off from the ACME
+# validators (e.g. web_ingress_cidrs restricts to a single CIDR). Requires an
+# OpenStack application credential with permission to write records in the
+# Designate zone. Store its id and secret in Barbican (`openstack secret
+# store --name ...`) and reference the two secret names below.
+#
+# caddy_dns_challenge: true
+# caddy_openstack_auth_url: "https://keystone.rc.nectar.org.au/v3/"
+# caddy_openstack_region: "Melbourne"
+# caddy_appcred_id_secret_name: caddy_appcred_id
+# caddy_appcred_secret_secret_name: caddy_appcred_secret
+
 # List of Dagster instances to deploy on the host. Each entry becomes:
 #   * a checkout at ~dagster/dagster-instances/<name>/
 #   * per-instance systemd units `tedisc@<name>.service` and

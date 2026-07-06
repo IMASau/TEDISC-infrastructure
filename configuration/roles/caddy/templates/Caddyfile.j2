@@ -1,8 +1,16 @@
-{% if caddy_email %}
+{% if caddy_email or caddy_dns_challenge %}
 {
+{% if caddy_email %}
     email {{ caddy_email }}
+{% endif %}
+{% if caddy_dns_challenge %}
+    # Auth for the DNS provider comes from OS_* vars set in
+    # /etc/caddy/openstack.env (loaded by the systemd drop-in).
+    acme_dns {{ caddy_dns_provider }}
+{% endif %}
 }
 {% endif %}
+
 {% for instance in dagster_instances %}
 {{ instance.subdomain }} {
     reverse_proxy localhost:{{ instance.port }}

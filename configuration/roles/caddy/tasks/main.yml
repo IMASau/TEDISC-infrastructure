@@ -1,41 +1,76 @@
 ---
-# - name: Install requirements for Caddy repo
-#   apt:
-#     name:
-#       - debian-keyring
-#       - debian-archive-keyring
-#       - apt-transport-https
-#       - curl
-#       - gpg
-#     state: present
-#     update_cache: yes
-
-# - name: Add Caddy GPG key
-#   get_url:
-#     url: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
-#     dest: /usr/share/keyrings/caddy-stable-archive-keyring.asc
-#     mode: '0644'
-
-# - name: Add Caddy repository
-#   apt_repository:
-#     repo: "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.asc] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main"
-#     state: present
-#     filename: caddy-stable
-
 - name: Install Caddy
-  apt:
+  ansible.builtin.apt:
     name: caddy
     state: "{{ 'latest' if caddy_version == 'latest' else 'present' }}"
-    update_cache: yes
+    update_cache: true
 
 - name: Ensure Caddy is started and enabled
-  systemd:
+  ansible.builtin.systemd:
     name: caddy
     state: started
-    enabled: yes
+    enabled: true
+
+# --- DNS-01: Caddy binary with the Designate module ------------------------
+# The apt package ships a stock Caddy without third-party DNS providers.
+# Download a version-latest binary with the requested provider baked in
+# from Caddy's official download builder, and use a systemd drop-in to
+# point the caddy.service at it. The download is idempotent — skipped when
+# the module is already present in the on-disk binary.
+
+- name: Check if custom Caddy binary already has the DNS module
+  ansible.builtin.command: /usr/local/bin/caddy list-modules
+  register: caddy_modules
+  changed_when: false
+  failed_when: false
+  when: caddy_dns_challenge
+
+- name: Download Caddy with the DNS-provider module
+  ansible.builtin.get_url:
+    url: "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com/caddy-dns/{{ caddy_dns_provider }}"
+    dest: /usr/local/bin/caddy
+    mode: '0755'
+    force: true
+  when:
+    - caddy_dns_challenge
+    - "'dns.providers.' + caddy_dns_provider not in (caddy_modules.stdout | default(''))"
+  notify: restart caddy
+
+- name: Ensure Caddy systemd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/caddy.service.d
+    state: directory
+    mode: '0755'
+  when: caddy_dns_challenge
+
+- name: Install systemd drop-in for custom Caddy binary + openstack env
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/caddy.service.d/override.conf
+    content: |
+      [Service]
+      # Replace the apt-shipped binary path with our custom-built one.
+      ExecStart=
+      ExecStart=/usr/local/bin/caddy run --environ --config /etc/caddy/Caddyfile
+      ExecReload=
+      ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
+      # Env file supplies OS_* credentials for the DNS-01 challenge.
+      EnvironmentFile=/etc/caddy/openstack.env
+    mode: '0644'
+  when: caddy_dns_challenge
+  notify: restart caddy
+
+- name: Template OpenStack env file (Designate creds via Barbican)
+  ansible.builtin.template:
+    src: openstack.env.j2
+    dest: /etc/caddy/openstack.env
+    owner: root
+    group: caddy
+    mode: '0640'
+  when: caddy_dns_challenge
+  notify: restart caddy
 
 - name: Deploy Caddyfile
-  template:
+  ansible.builtin.template:
     src: Caddyfile.j2
     dest: /etc/caddy/Caddyfile
     owner: root
