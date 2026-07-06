@@ -56,6 +56,8 @@ dagster_instances:
     repo: https://github.com/eloisewm/TEDISC-Dagster.git
     port: 3004
     subdomain: ore.dagster.ore-tedisc.cloud.edu.au
+    user_code_image: ghcr.io/eloisewm/tedisc-dagster/user-code:latest
+    dagster_image: ghcr.io/eloisewm/tedisc-dagster/dagster:latest
     env:
       BLA_FILEPATH: /opt/dagster/app/Datasets/BirdLifeAustralia/bla_output_csiro_290525.csv
       DB_HOST: testimasag3.its.utas.edu.au
