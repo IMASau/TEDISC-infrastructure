@@ -57,6 +57,10 @@
 #       DAGSTER_POSTGRES_PASSWORD: d1_dagster_postgres_password
 #       DB_USER: d1_db_user
 #       DB_PASSWORD: d1_db_password
+#       # dagster-authkit session key (generate: `openssl rand -base64 32`)
+#       DAGSTER_AUTH_SECRET_KEY: d1_dagster_auth_secret_key
+#       # First-boot password for the auto-created `admin` user.
+#       DAGSTER_AUTH_ADMIN_PASSWORD: d1_dagster_auth_admin_password
 #   - name: d2
 #     repo: https://github.com/eloisewm/TEDISC-Dagster.git
 #     branch: staging
@@ -97,4 +101,6 @@ dagster_instances:
       DAGSTER_POSTGRES_PASSWORD: ore_dagster_postgres_password
       DB_USER: ore_db_user
       DB_PASSWORD: ore_db_password
+      DAGSTER_AUTH_SECRET_KEY: ore_dagster_auth_secret_key
+      DAGSTER_AUTH_ADMIN_PASSWORD: ore_dagster_auth_admin_password
 # Later; name: mh or macharbour
