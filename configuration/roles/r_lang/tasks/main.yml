@@ -1,0 +1,77 @@
+---
+# Ubuntu's own archive lags R badly — noble/universe is on 4.3.3 against
+# CRAN's 4.6.x — so R comes from CRAN's apt repo rather than the distro.
+
+- name: Ensure prerequisites for adding the CRAN repo are installed
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gnupg
+      # deb822_repository is implemented on top of python-debian and fails
+      # with "Could not import the debian python module" without it. Minimal
+      # Nectar images don't ship it.
+      - python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Add the CRAN apt repository
+  ansible.builtin.deb822_repository:
+    name: cran
+    types: [deb]
+    uris: https://cloud.r-project.org/bin/linux/ubuntu
+    # Trailing slash is load-bearing: CRAN publishes this as a flat repo, so
+    # the suite is a literal path and there are no components.
+    # -cran40 covers the whole R 4.x series, not one minor version.
+    suites: "{{ ansible_distribution_release }}-cran40/"
+    signed_by: https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc
+    state: present
+    enabled: true
+  register: r_lang_cran_repo
+
+- name: Refresh apt cache after adding CRAN
+  ansible.builtin.apt:
+    update_cache: true
+  when: r_lang_cran_repo.changed
+
+# No apt pin needed: CRAN's 4.6.x outranks universe's 4.3.3 on version alone.
+- name: Install R
+  ansible.builtin.apt:
+    name:
+      - r-base
+      - r-base-dev
+    state: present
+    install_recommends: false
+
+- name: Install build dependencies for source R packages
+  ansible.builtin.apt:
+    name: "{{ r_lang_build_deps }}"
+    state: present
+
+# Posit only hands back binaries when the user agent identifies R and the
+# platform — without HTTPUserAgent you silently get source tarballs instead.
+- name: Point install.packages() at Posit's binary builds
+  ansible.builtin.copy:
+    dest: /etc/R/Rprofile.site
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      options(
+        repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/{{ ansible_distribution_release }}/latest"),
+        HTTPUserAgent = sprintf(
+          "R/%s R (%s)",
+          getRversion(),
+          paste(getRversion(), R.version["platform"], R.version["arch"], R.version["os"])
+        )
+      )
+  when: r_lang_use_posit_binaries
+
+- name: Install R libraries
+  ansible.builtin.command:
+    argv:
+      - Rscript
+      - -e
+      - install.packages("{{ item }}")
+    creates: "/usr/local/lib/R/site-library/{{ item }}"
+  loop: "{{ r_lang_packages }}"

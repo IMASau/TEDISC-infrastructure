@@ -1,0 +1,26 @@
+---
+# R libraries installed system-wide, into the site library. Project-level
+# dependencies are better pinned with renv inside the project itself; this is
+# for things every user of the box needs.
+r_lang_packages: []
+
+# Build deps for CRAN packages with no binary available. Covers the usual
+# tidyverse/devtools surface — curl/openssl/xml2 for the web stack, and the
+# font and image libraries that ragg, systemfonts and textshaping need.
+r_lang_build_deps:
+  - build-essential
+  - libcurl4-openssl-dev
+  - libssl-dev
+  - libxml2-dev
+  - libfontconfig1-dev
+  - libharfbuzz-dev
+  - libfribidi-dev
+  - libfreetype6-dev
+  - libpng-dev
+  - libtiff5-dev
+  - libjpeg-dev
+
+# Posit's package manager serves prebuilt Ubuntu binaries, sparing this VM
+# from compiling every install.packages() call from source. Set to false to
+# fall back to stock CRAN and source builds.
+r_lang_use_posit_binaries: true

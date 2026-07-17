@@ -4,6 +4,7 @@
   become: true
   roles:
     - bootstrap
+    - r_lang
     - dagster_user
     - podman
     - dagster_instance
