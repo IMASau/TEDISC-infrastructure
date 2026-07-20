@@ -1,0 +1,7 @@
+---
+- name: Configure remote VM
+  hosts: processing
+  become: true
+  roles:
+    - bootstrap
+    - r_lang
