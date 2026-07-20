@@ -2,6 +2,8 @@
 all:
   hosts:
     server:
+      ansible_host: dagster-dev.imas.utas.edu.au
+    processing:
       ansible_host: dagster.ore-tedisc.cloud.edu.au
       ansible_user: ubuntu
   vars:
