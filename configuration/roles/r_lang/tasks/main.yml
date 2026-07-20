@@ -75,3 +75,23 @@
       - install.packages("{{ item }}")
     creates: "/usr/local/lib/R/site-library/{{ item }}"
   loop: "{{ r_lang_packages }}"
+
+- name: Install R remotes package
+  ansible.builtin.command:
+    argv:
+      - Rscript
+      - -e
+      - install.packages("remotes")
+    creates: "/usr/local/lib/R/site-library/remotes"
+  when: r_lang_github_packages
+
+- name: Install R packages from github
+  ansible.builtin.command:
+    argv:
+      - Rscript
+      - -e
+      - remotes::install_github("{{ item }}")
+    # item format is username/package but it only *creates* "package":
+    creates: "/usr/local/lib/R/site-library/{{ item | split('/') | last }}"
+  loop: "{{ r_lang_github_packages }}"
+

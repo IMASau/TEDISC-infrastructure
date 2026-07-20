@@ -3,6 +3,7 @@
 # dependencies are better pinned with renv inside the project itself; this is
 # for things every user of the box needs.
 r_lang_packages: []
+r_lang_github_packages: ["joekirincic/dagsterpipes"]
 
 # Build deps for CRAN packages with no binary available. Covers the usual
 # tidyverse/devtools surface — curl/openssl/xml2 for the web stack, and the
