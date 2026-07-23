@@ -96,6 +96,11 @@ dagster_deploy_key_secret_name: dagster_deploy_key
 dagster_ghcr_token_secret_name: dagster_ghcr_token
 dagster_ghcr_username: markhepburn
 
+dagster_user: sa-container
+dagster_instances_root: "/srv/{{ dagster_user }}/dagster-instances"
+dagster_deploy_key_path: "/srv/{{ dagster_user }}/.ssh/id_ed25519"
+
+
 dagster_instances:
   - name: ore
     # SSH, not HTTPS — the deploy key is an SSH credential. An HTTPS URL with

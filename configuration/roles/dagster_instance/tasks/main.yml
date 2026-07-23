@@ -8,6 +8,10 @@
   ansible.builtin.set_fact:
     dagster_user_uid: "{{ getent_passwd[dagster_user][1] }}"
 
+- name: Set dagster user home-dir
+  ansible.builtin.set_fact:
+    dagster_home_dir: "{{ getent_passwd[dagster_user][4] }}"
+
 - name: Ensure the instances root exists
   ansible.builtin.file:
     path: "{{ dagster_instances_root }}"
@@ -18,7 +22,7 @@
 
 - name: Ensure the user's systemd unit directory exists
   ansible.builtin.file:
-    path: "/home/{{ dagster_user }}/.config/systemd/user"
+    path: "{{ dagster_home_dir }}/.config/systemd/user"
     state: directory
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
@@ -54,7 +58,7 @@
 
 - name: Ensure the dagster user's registry auth directory exists
   ansible.builtin.file:
-    path: "/home/{{ dagster_user }}/.docker"
+    path: "{{ dagster_home_dir }}/.docker"
     state: directory
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
@@ -67,7 +71,7 @@
 - name: Install registry credentials for pulling private images
   ansible.builtin.template:
     src: docker-config.json.j2
-    dest: "/home/{{ dagster_user }}/.docker/config.json"
+    dest: "{{ dagster_home_dir }}/.docker/config.json"
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
     mode: '0600'
@@ -96,7 +100,7 @@
 - name: Install shared systemd unit templates
   ansible.builtin.copy:
     src: "{{ dagster_instances_root }}/{{ dagster_instances[0].name }}/scripts/{{ item }}"
-    dest: "/home/{{ dagster_user }}/.config/systemd/user/{{ item }}"
+    dest: "{{ dagster_home_dir }}/.config/systemd/user/{{ item }}"
     remote_src: true
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
