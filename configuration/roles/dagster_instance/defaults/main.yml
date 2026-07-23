@@ -6,3 +6,27 @@ dagster_instances_root: "/home/{{ dagster_user }}/dagster-instances"
 # List of instances to deploy. See group_vars for the expected shape; empty
 # by default so a play with no user config makes no changes here.
 dagster_instances: []
+
+# --- Private repo / registry access -----------------------------------------
+# Both are empty by default: a public repo and public images need no
+# credentials, and an empty name skips the corresponding task entirely.
+
+# Barbican secret holding the PEM private half of a read-only GitHub deploy
+# key for the instance repos. Read-only and scoped to a single repo, unlike a
+# classic PAT (whose `repo` scope grants write to *every* repo the owning
+# account can see). Requires the `repo:` URLs to be SSH, not HTTPS.
+dagster_deploy_key_secret_name: ""
+dagster_deploy_key_path: "/home/{{ dagster_user }}/.ssh/id_ed25519"
+
+# Barbican secret holding a GitHub personal access token (classic) with only
+# the `read:packages` scope, for pulling private images. A deploy key cannot
+# be used here — image pulls are OCI-over-HTTPS with bearer tokens, which has
+# no SSH transport to plug a key into. GHCR does not accept fine-grained
+# PATs; classic is the only option.
+dagster_ghcr_token_secret_name: ""
+
+# GHCR ignores the username when the password is a PAT, but it must be
+# non-empty. Name it after the machine user that owns the token.
+dagster_ghcr_username: "tedisc-bot"
+
+dagster_registry: ghcr.io

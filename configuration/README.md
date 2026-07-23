@@ -122,6 +122,124 @@ openstack secret store --name caddy_appcred_secret --payload '<new-secret>'
 
 Then re-run the playbook; the templated env file is overwritten and lego picks up the new credential on the next renewal (or `sudo systemctl start lego.service` to force one now).
 
+## Private instance repos and images
+
+`TEDISC-Dagster` is private, and its images on `ghcr.io` should be too. That
+needs **two** credentials on the host, and they can't be merged into one:
+
+- **The clone** uses a read-only **deploy key** (SSH). It's scoped to a single
+  repo, never expires, and belongs to the repo rather than to a person's
+  account.
+- **The image pulls** need a **personal access token (classic)** with only the
+  `read:packages` scope. A deploy key can't be used here: image pulls are the
+  OCI spec over HTTPS with bearer tokens, and there's no SSH transport to plug
+  a key into. GitHub does not accept fine-grained PATs for GHCR.
+
+Why not one classic PAT for both? Covering the clone would need the `repo`
+scope, which is *full control* of every private repo the owning account can
+see — read and write, with no read-only variant. The split keeps each
+credential narrow.
+
+Both credentials must persist on the host: `tedisc-deploy@<name>.timer`
+re-pulls the repo and images on a schedule, long after the play has finished.
+
+### One-time setup
+
+1. Generate a deploy key. No passphrase — nothing is around to type one in on
+   an unattended timer run:
+   ```bash
+   ssh-keygen -t ed25519 -N '' -C 'tedisc-infra deploy key' -f /tmp/tedisc_deploy_key
+   ```
+
+2. Add the **public** half to the repo (not the account): GitHub → the
+   `TEDISC-Dagster` repo → Settings → Deploy keys → Add deploy key. Paste
+   `/tmp/tedisc_deploy_key.pub`. **Leave "Allow write access" unticked.**
+
+3. Store the **private** half in Barbican, then delete the local copies:
+   ```bash
+   openstack secret store --name dagster_deploy_key --payload-content-type='text/plain' \
+     --payload "$(cat /tmp/tedisc_deploy_key)"
+   shred -u /tmp/tedisc_deploy_key /tmp/tedisc_deploy_key.pub
+   ```
+
+4. Decide who owns the GHCR token. A classic PAT is tied to a user account, so
+   a personal one dies with that account's access — prefer a **machine user**
+   (a dedicated GitHub account, e.g. `tedisc-bot`). Package access can be
+   granted to a user independently of the repository, so the machine user
+   needs read on the *packages* only and never needs access to the source.
+
+5. As that account, create the token: GitHub → Settings → Developer settings →
+   Personal access tokens → **Tokens (classic)**. Tick **only** `read:packages`.
+   Store it:
+   ```bash
+   openstack secret store --name dagster_ghcr_token --payload '<token>'
+   ```
+
+6. Make the packages private, and grant the machine user read on each. Package
+   visibility is **independent of the repo** — making `TEDISC-Dagster` private
+   did *not* make these private, so it's a manual change:
+   - `ghcr.io/eloisewm/tedisc-dagster/user-code`
+   - `ghcr.io/eloisewm/tedisc-dagster/dagster`
+
+   For each: GitHub → Packages → the package → Package settings → Manage
+   Actions access / Change visibility.
+
+7. Configure in `inventory/group_vars/all.yml` (the repo URL must be SSH — an
+   HTTPS URL with an embedded token would write that token into `.git/config`
+   on the host):
+   ```yaml
+   dagster_deploy_key_secret_name: dagster_deploy_key
+   dagster_ghcr_token_secret_name: dagster_ghcr_token
+   dagster_ghcr_username: tedisc-bot
+
+   dagster_instances:
+     - name: ore
+       repo: git@github.com:eloisewm/TEDISC-Dagster.git
+   ```
+
+8. Verify before re-running the playbook — both should succeed from your
+   laptop with the same credentials:
+   ```bash
+   GIT_SSH_COMMAND='ssh -i /tmp/tedisc_deploy_key -o IdentitiesOnly=yes' \
+     git ls-remote git@github.com:eloisewm/TEDISC-Dagster.git
+
+   echo '<token>' | podman login ghcr.io -u tedisc-bot --password-stdin
+   podman pull ghcr.io/eloisewm/tedisc-dagster/user-code:latest
+   ```
+
+Then run the playbook. Ansible writes the key to `~dagster/.ssh/id_ed25519`
+and the registry credentials to `~dagster/.docker/config.json`, both `0600`.
+
+That `.docker` path on a podman host is deliberate. Rootless podman's default
+authfile is `${XDG_RUNTIME_DIR}/containers/auth.json`, under `/run/user/<uid>`
+— tmpfs, wiped on reboot, after which the deploy timer would fail to pull.
+`~/.docker/config.json` is podman's documented fallback, is persistent, and
+needs no `REGISTRY_AUTH_FILE` plumbed into the systemd units (which ship from
+the instance repo, not this one).
+
+### Rotating
+
+Deploy key — generate a new one, add it to the repo, then:
+```bash
+openstack secret delete <old-href>
+openstack secret store --name dagster_deploy_key --payload_content_type='text/plain' \
+  --payload "$(cat /tmp/new_key)"
+```
+Remove the old key from the repo's Deploy keys page and re-run the playbook.
+
+GHCR token — regenerate it in the machine user's token settings, then replace
+`dagster_ghcr_token` in Barbican the same way and re-run.
+
+### Notes
+
+- The clone uses `accept_hostkey: true`, i.e. trust-on-first-use for
+  github.com's host key. The exposure is a first-run-only window and pinning
+  would need maintenance when GitHub rotates keys (as they did in 2023), but
+  it's worth knowing it's a TOFU rather than a pin.
+- `~dagster/.docker/config.json` stores `base64(user:token)` — that's
+  encoding, not encryption. Mode `0600` is what protects it, same as the
+  `.env` files alongside it, which already hold DB passwords.
+
 ## Run
 
 ```bash

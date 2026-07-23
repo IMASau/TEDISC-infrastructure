@@ -24,7 +24,9 @@
 # Fields per entry:
 #   name             required, unique short slug (used for compose project,
 #                    checkout dir, systemd instance name, container/volume prefix)
-#   repo             required, git URL to clone (HTTPS for public repos)
+#   repo             required, git URL to clone. SSH (git@github.com:...) for
+#                    private repos — see dagster_deploy_key_secret_name below;
+#                    HTTPS is fine for public ones.
 #   branch           optional, defaults to "main"
 #   port             required, host-side port the webserver is mapped to
 #   subdomain        required, FQDN Caddy serves TLS for
@@ -84,9 +86,21 @@ lego_appcred_secret_secret_name: caddy_appcred_secret
 caddy_cert_file: "/var/lib/lego/certificates/_.dagster.ore-tedisc.cloud.edu.au.crt"
 caddy_key_file: "/var/lib/lego/certificates/_.dagster.ore-tedisc.cloud.edu.au.key"
 
+# --- Private repo / registry access -----------------------------------------
+# TEDISC-Dagster is private, so both the clone and the image pulls need
+# credentials on the host. See configuration/README.md for the one-time
+# GitHub-side setup. Two separate credentials, deliberately: a deploy key is
+# read-only and single-repo, whereas the classic PAT that GHCR requires would
+# need the `repo` scope (full write to every repo) to also cover the clone.
+dagster_deploy_key_secret_name: dagster_deploy_key
+dagster_ghcr_token_secret_name: dagster_ghcr_token
+dagster_ghcr_username: markhepburn
+
 dagster_instances:
   - name: ore
-    repo: https://github.com/eloisewm/TEDISC-Dagster.git
+    # SSH, not HTTPS — the deploy key is an SSH credential. An HTTPS URL with
+    # an embedded token would also write that token into .git/config on disk.
+    repo: git@github.com:eloisewm/TEDISC-Dagster.git
     port: 3004
     subdomain: ore.dagster.ore-tedisc.cloud.edu.au
     user_code_image: ghcr.io/eloisewm/tedisc-dagster/user-code:latest
