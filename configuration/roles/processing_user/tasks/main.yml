@@ -1,0 +1,19 @@
+---
+# Unlike the dagster_user role this user only receives SSH connections, so no
+# lingering or subuid/subgid allocation is needed.
+- name: Create processing service user
+  ansible.builtin.user:
+    name: "{{ processing_user }}"
+    shell: "{{ processing_user_shell }}"
+    system: true
+    create_home: true
+    state: present
+
+# The lookup runs on the controller, with the same OS_* / clouds.yaml auth as
+# every other openstack_secret use in this repo.
+- name: Install the dagster public key
+  ansible.posix.authorized_key:
+    user: "{{ processing_user }}"
+    key: "{{ lookup('openstack_secret', processing_user_pubkey_secret_name) | trim }}"
+    state: present
+  when: processing_user_pubkey_secret_name | length > 0

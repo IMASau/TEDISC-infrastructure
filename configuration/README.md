@@ -240,6 +240,49 @@ GHCR token — regenerate it in the machine user's token settings, then replace
   encoding, not encryption. Mode `0600` is what protects it, same as the
   `.env` files alongside it, which already hold DB passwords.
 
+## SSH access to the Nectar processing VM
+
+The dagster pipelines SSH into the Nectar processing VM to run jobs there,
+configured by three env vars: `NECTAR_INSTANCE_IP`, `NECTAR_SSH_USER` and
+`NECTAR_SSH_KEY`. The plumbing spans both playbooks:
+
+- `processing.yml` creates a dedicated service user (`processing_user`, no
+  sudo, nothing else on the box runs as it) and installs the **public** half
+  of a keypair in its `authorized_keys`.
+- `dagster.yml` writes the **private** half next to each instance checkout
+  (`<checkout>/nectar_ssh_key`, mode `0600`), where the containers can reach
+  it.
+
+`NECTAR_SSH_KEY` holds the *in-container path* to that file, not the key
+material — a multi-line PEM wouldn't survive the sourceable `.env` format.
+All three vars ride the normal per-instance `env:` map in
+`inventory/group_vars/all.yml`.
+
+Barbican can't generate ed25519 keys (its Orders API is RSA-only), so the
+keypair is generated locally and both halves stored as ordinary secrets:
+
+### One-time setup
+
+```bash
+ssh-keygen -t ed25519 -N '' -C 'tedisc nectar processing' -f /tmp/nectar_key
+openstack secret store --name nectar_ssh_private_key \
+  --payload-content-type='text/plain' --payload "$(cat /tmp/nectar_key)"
+openstack secret store --name nectar_ssh_public_key \
+  --payload-content-type='text/plain' --payload "$(cat /tmp/nectar_key.pub)"
+shred -u /tmp/nectar_key /tmp/nectar_key.pub
+```
+
+No passphrase, for the same reason as the deploy key: nothing is around to
+type one in when a pipeline run fires.
+
+### Rotating
+
+Generate and store a new pair as above (`openstack secret delete` the old
+hrefs first), then re-run **both** playbooks — `processing.yml` to swap the
+authorized key, `dagster.yml` to swap the private key files. The old public
+key lingers in `authorized_keys` until removed (the play only ever adds), so
+delete it manually if the rotation is revoking access rather than routine.
+
 ## Run
 
 ```bash

@@ -100,6 +100,18 @@ dagster_user: sa-container
 dagster_instances_root: "/srv/{{ dagster_user }}/dagster-instances"
 dagster_deploy_key_path: "/srv/{{ dagster_user }}/.ssh/id_ed25519"
 
+# --- Nectar processing VM SSH access -----------------------------------------
+# The dagster pipelines SSH into the processing VM as a dedicated service
+# user. The keypair is generated locally and both halves stored in Barbican
+# (see configuration/README.md): the processing playbook installs the public
+# half for that user, and the dagster playbook writes the private half next to
+# each instance checkout. The NECTAR_INSTANCE_IP / NECTAR_SSH_USER /
+# NECTAR_SSH_KEY env vars the pipelines read ride the normal per-instance
+# `env:` map below.
+processing_user: svc-dagster
+processing_user_pubkey_secret_name: nectar_ssh_public_key
+dagster_nectar_ssh_key_secret_name: nectar_ssh_private_key
+
 
 dagster_instances:
   - name: ore
@@ -116,6 +128,11 @@ dagster_instances:
       DB_PORT: '1433'
       DB_NAME: IMASOREMonitoring
       DB_DRIVER: ODBC Driver 18 for SQL Server
+      NECTAR_INSTANCE_IP: "131.217.169.160"  # tedisc-vm floating IP
+      NECTAR_SSH_USER: "{{ processing_user }}"
+      # In-container path to the private key the dagster_instance role writes
+      # next to this instance's checkout.
+      NECTAR_SSH_KEY: /opt/dagster/app/nectar_ssh_key
     secrets:
       DAGSTER_POSTGRES_PASSWORD: ore_dagster_postgres_password
       DB_USER: ore_db_user

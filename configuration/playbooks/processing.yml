@@ -4,4 +4,5 @@
   become: true
   roles:
     - bootstrap
+    - processing_user
     - r_lang

@@ -1,4 +1,18 @@
 ---
+# Same trim-then-re-terminate treatment as the deploy key in main.yml: ssh
+# rejects a key file with no trailing newline. The file sits untracked in the
+# checkout (like .env below), which git pulls leave alone.
+- name: "[{{ instance.name }}] Install the Nectar SSH private key"
+  become_user: "{{ dagster_user }}"
+  ansible.builtin.copy:
+    content: "{{ lookup('openstack_secret', dagster_nectar_ssh_key_secret_name) | trim }}\n"
+    dest: "{{ dagster_instances_root }}/{{ instance.name }}/nectar_ssh_key"
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0600'
+  no_log: true
+  when: dagster_nectar_ssh_key_secret_name | length > 0
+
 - name: "[{{ instance.name }}] Write .env file"
   become_user: "{{ dagster_user }}"
   ansible.builtin.template:

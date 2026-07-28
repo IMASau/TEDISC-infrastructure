@@ -1,0 +1,10 @@
+---
+# Dedicated service user the dagster pipelines SSH in as (the value of the
+# NECTAR_SSH_USER env var on the dagster side).
+processing_user: svc-dagster
+processing_user_shell: /bin/bash
+
+# Barbican secret holding the OpenSSH *public* half of the keypair whose
+# private half the dagster_instance role installs next to each checkout.
+# Empty by default: no secret name, no key installed.
+processing_user_pubkey_secret_name: ""

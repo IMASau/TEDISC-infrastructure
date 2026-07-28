@@ -30,3 +30,10 @@ dagster_ghcr_token_secret_name: ""
 dagster_ghcr_username: "tedisc-bot"
 
 dagster_registry: ghcr.io
+
+# Barbican secret holding the private half of the keypair whose public half
+# the processing_user role installs on the Nectar processing VM. Written next
+# to each instance checkout so the containers can SSH into that VM; the
+# instance's NECTAR_SSH_KEY env var should point at the file's in-container
+# path. Empty skips the install.
+dagster_nectar_ssh_key_secret_name: ""
