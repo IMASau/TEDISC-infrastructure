@@ -4,7 +4,7 @@ Provisions a server with:
 
 - **Caddy** — reverse-proxies to a configurable port
 - **Podman** — rootless container runtime
-- **dagster** - running as system user
+- **dagster** — running as system user
 
 ## Getting started
 
