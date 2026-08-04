@@ -24,9 +24,9 @@
 # Fields per entry:
 #   name             required, unique short slug (used for compose project,
 #                    checkout dir, systemd instance name, container/volume prefix)
-#   repo             required, git URL to clone. SSH (git@github.com:...) for
-#                    private repos — see dagster_deploy_key_secret_name below;
-#                    HTTPS is fine for public ones.
+#   repo             required, git URL to clone. HTTPS (https://github.com/...)
+#                    — private repos authenticate through the GitHub App
+#                    credential helper (see dagster_github_app_* below).
 #   branch           optional, defaults to "main"
 #   port             required, host-side port the webserver is mapped to
 #   subdomain        required, FQDN Caddy serves TLS for
@@ -40,6 +40,10 @@
 #                    tag used by the webserver and daemon services
 #   deploy_mode      optional, "git" (default) or "registry" — how
 #                    deploy-update.sh keeps the stack current
+#   github_owner     optional, account owning the ghcr.io images when that
+#                    differs from the repo owner (defaults to the repo
+#                    owner); must have an entry in
+#                    dagster_github_app_installations
 #   docker_network   optional, overrides the default network name
 #                    (${name}_default); rarely needed
 #
@@ -89,16 +93,21 @@ caddy_key_file: "/var/lib/lego/certificates/_.dagster.ore-tedisc.cloud.edu.au.ke
 # --- Private repo / registry access -----------------------------------------
 # TEDISC-Dagster is private, so both the clone and the image pulls need
 # credentials on the host. See configuration/README.md for the one-time
-# GitHub-side setup. Two separate credentials, deliberately: a deploy key is
-# read-only and single-repo, whereas the classic PAT that GHCR requires would
-# need the `repo` scope (full write to every repo) to also cover the clone.
-dagster_deploy_key_secret_name: dagster_deploy_key
-dagster_ghcr_token_secret_name: dagster_ghcr_token
-dagster_ghcr_username: markhepburn
+# GitHub-side setup. A single GitHub App installation (contents:read +
+# packages:read) covers both: its private key is stored in Barbican, and the
+# host mints short-lived installation tokens at pull time via git/podman
+# credential helpers — nothing longer-lived than the key itself is on disk.
+dagster_github_app_id: "REPLACE_ME"  # app settings page → App ID
+# Owner -> installation id. Installations are per GitHub account, so if a
+# future instance repo belongs to a different user/org, install the app
+# there too and add its entry (…/settings/installations/<id>).
+dagster_github_app_installations:
+  eloisewm: "REPLACE_ME"
+dagster_github_app_key_secret_name: dagster_github_app_key
 
 dagster_user: sa-container
 dagster_instances_root: "/srv/{{ dagster_user }}/dagster-instances"
-dagster_deploy_key_path: "/srv/{{ dagster_user }}/.ssh/id_ed25519"
+dagster_github_app_key_path: "/srv/{{ dagster_user }}/.config/github-app/key.pem"
 
 # --- Nectar processing VM SSH access -----------------------------------------
 # The dagster pipelines SSH into the processing VM as a dedicated service
@@ -115,9 +124,10 @@ dagster_nectar_ssh_key_secret_name: nectar_ssh_private_key
 
 dagster_instances:
   - name: ore
-    # SSH, not HTTPS — the deploy key is an SSH credential. An HTTPS URL with
-    # an embedded token would also write that token into .git/config on disk.
-    repo: git@github.com:eloisewm/TEDISC-Dagster.git
+    # HTTPS, not SSH — installation tokens are HTTPS credentials. The
+    # credential helper supplies them at pull time, so no token is ever
+    # written into .git/config on disk.
+    repo: https://github.com/eloisewm/TEDISC-Dagster.git
     port: 3004
     subdomain: ore.dagster.ore-tedisc.cloud.edu.au
     user_code_image: ghcr.io/eloisewm/tedisc-dagster/user-code:latest

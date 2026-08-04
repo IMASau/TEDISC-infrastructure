@@ -124,91 +124,122 @@ Then re-run the playbook; the templated env file is overwritten and lego picks u
 
 ## Private instance repos and images
 
-`TEDISC-Dagster` is private, and its images on `ghcr.io` should be too. That
-needs **two** credentials on the host, and they can't be merged into one:
+`TEDISC-Dagster` is private, and its images on `ghcr.io` should be too. Both
+the clone and the image pulls authenticate through a single **GitHub App**
+installation with two read-only permissions:
 
-- **The clone** uses a read-only **deploy key** (SSH). It's scoped to a single
-  repo, never expires, and belongs to the repo rather than to a person's
-  account.
-- **The image pulls** need a **personal access token (classic)** with only the
-  `read:packages` scope. A deploy key can't be used here: image pulls are the
-  OCI spec over HTTPS with bearer tokens, and there's no SSH transport to plug
-  a key into. GitHub does not accept fine-grained PATs for GHCR.
+- **`contents: read`** — the clones and `git pull`s (over HTTPS).
+- **`packages: read`** — the `ghcr.io` image pulls.
 
-Why not one classic PAT for both? Covering the clone would need the `repo`
-scope, which is *full control* of every private repo the owning account can
-see — read and write, with no read-only variant. The split keeps each
-credential narrow.
+This replaced an earlier deploy-key + classic-PAT pair. One credential
+instead of two, it's read-only, it's scoped to exactly the repos the
+installations grant (a deploy key is single-repo; a classic PAT is
+account-wide), and it belongs to the app rather than to a person's account.
+GHCR accepts App installation tokens (unlike fine-grained PATs, which it
+still rejects).
 
-Both credentials must persist on the host: `tedisc-deploy@<name>.timer`
-re-pulls the repo and images on a schedule, long after the play has finished.
+Installations are per GitHub **account**: one app, installed on each account
+that owns instance repos, each installation granting the relevant repos.
+`dagster_github_app_installations` maps owner → installation id, and the
+owner is resolved per operation — git passes the repo path to the credential
+helper (`useHttpPath`), while podman only ever tells helpers the registry
+hostname, so each unit instance carries its image owner in a
+`GITHUB_APP_OWNER` environment drop-in instead (derived from the instance's
+repo URL, or set explicitly with `github_owner:`).
+
+The catch: installation tokens **expire after an hour**, and
+`tedisc-deploy@<name>.timer` re-pulls the repo and images on a schedule, long
+after the play has finished. So Ansible never installs a token. It installs
+the app's **private key** (from Barbican) plus a mint-and-cache script,
+`~sa-container/.local/bin/github-app-token`, and wires git and podman to call
+it *at pull time*:
+
+- `~sa-container/.gitconfig` sets a `credential.helper` for `github.com`, so
+  every HTTPS git operation — the play-time clone and the timer's later
+  pulls — fetches a fresh token. Nothing lands in `.git/config`.
+- `~sa-container/.docker/config.json` maps `ghcr.io` to a
+  `docker-credential-github-app` helper (a shim around the same script), so
+  every podman pull does likewise. Tokens are cached (`~/.cache/github-app/`,
+  `0600`) and re-minted when within 5 minutes of expiry.
+
+The instance repo's units and `deploy-update.sh` needed no changes — the
+helpers sit underneath the stock git/podman credential machinery. And since
+we have no root on this host (it's administered by UTAS; we only have the
+`sa-container` user), everything lives in that user's home. The one wrinkle:
+podman finds the `docker-credential-*` shim via the unit's `$PATH`, which by
+default excludes `~/.local/bin` — the role adds per-unit drop-ins
+(`~/.config/systemd/user/tedisc*@.service.d/`) that prepend it, leaving the
+shipped unit files untouched.
 
 ### One-time setup
 
-1. Generate a deploy key. No passphrase — nothing is around to type one in on
-   an unattended timer run:
+1. Create the GitHub App (owner: the account that owns the repos): GitHub →
+   Settings → Developer settings → GitHub Apps → New GitHub App. Untick
+   **Webhook → Active** (no webhook), set Repository permissions **Contents:
+   Read-only** and **Packages: Read-only**, and restrict to "Only on this
+   account". Note the **App ID** from the app's settings page.
+
+2. Install the app on **each account that owns instance repos**, granting
+   **only** those repos (Install App → select repositories). Each
+   installation's ID is the trailing number in its URL
+   (`…/settings/installations/<id>`); adding a repo under an
+   already-installed account is just a checkbox on that page, no new IDs.
+
+3. Generate a private key (app settings page → Private keys), then store the
+   downloaded PEM in Barbican and delete the local copy:
    ```bash
-   ssh-keygen -t ed25519 -N '' -C 'tedisc-infra deploy key' -f /tmp/tedisc_deploy_key
+   openstack secret store --name dagster_github_app_key \
+     --payload-content-type='text/plain' --payload "$(cat /tmp/tedisc-app.*.pem)"
+   shred -u /tmp/tedisc-app.*.pem
    ```
 
-2. Add the **public** half to the repo (not the account): GitHub → the
-   `TEDISC-Dagster` repo → Settings → Deploy keys → Add deploy key. Paste
-   `/tmp/tedisc_deploy_key.pub`. **Leave "Allow write access" unticked.**
-
-3. Store the **private** half in Barbican, then delete the local copies:
-   ```bash
-   openstack secret store --name dagster_deploy_key --payload-content-type='text/plain' \
-     --payload "$(cat /tmp/tedisc_deploy_key)"
-   shred -u /tmp/tedisc_deploy_key /tmp/tedisc_deploy_key.pub
-   ```
-
-4. Decide who owns the GHCR token. A classic PAT is tied to a user account, so
-   a personal one dies with that account's access — prefer a **machine user**
-   (a dedicated GitHub account, e.g. `tedisc-bot`). Package access can be
-   granted to a user independently of the repository, so the machine user
-   needs read on the *packages* only and never needs access to the source.
-
-5. As that account, create the token: GitHub → Settings → Developer settings →
-   Personal access tokens → **Tokens (classic)**. Tick **only** `read:packages`.
-   Store it:
-   ```bash
-   openstack secret store --name dagster_ghcr_token --payload '<token>'
-   ```
-
-6. Make the packages private, and grant the machine user read on each. Package
-   visibility is **independent of the repo** — making `TEDISC-Dagster` private
-   did *not* make these private, so it's a manual change:
+4. Make the packages private. Package visibility is **independent of the
+   repo** — making `TEDISC-Dagster` private did *not* make these private:
    - `ghcr.io/eloisewm/tedisc-dagster/user-code`
    - `ghcr.io/eloisewm/tedisc-dagster/dagster`
 
-   For each: GitHub → Packages → the package → Package settings → Manage
-   Actions access / Change visibility.
+   Installation tokens can pull a package when it's **connected to a repo the
+   installation covers** — true automatically for images pushed from Actions
+   with `GITHUB_TOKEN`; otherwise connect it under Package settings.
 
-7. Configure in `inventory/group_vars/all.yml` (the repo URL must be SSH — an
-   HTTPS URL with an embedded token would write that token into `.git/config`
-   on the host):
-   ```yaml
-   dagster_deploy_key_secret_name: dagster_deploy_key
-   dagster_ghcr_token_secret_name: dagster_ghcr_token
-   dagster_ghcr_username: tedisc-bot
-
-   dagster_instances:
-     - name: ore
-       repo: git@github.com:eloisewm/TEDISC-Dagster.git
-   ```
-
-8. Verify before re-running the playbook — both should succeed from your
-   laptop with the same credentials:
+5. Verify from your laptop before touching the playbook — this is the step
+   that catches a mis-granted installation or an unconnected package. Repeat
+   per installation if there's more than one:
    ```bash
-   GIT_SSH_COMMAND='ssh -i /tmp/tedisc_deploy_key -o IdentitiesOnly=yes' \
-     git ls-remote git@github.com:eloisewm/TEDISC-Dagster.git
+   APP_ID=<id> INST_ID=<id> KEY=/tmp/tedisc-app.pem
+   b64() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+   now=$(date +%s)
+   hdr=$(printf '{"alg":"RS256","typ":"JWT"}' | b64)
+   pay=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((now-60)) $((now+540)) "$APP_ID" | b64)
+   sig=$(printf '%s.%s' "$hdr" "$pay" | openssl dgst -sha256 -sign "$KEY" | b64)
+   TOKEN=$(curl -sf -X POST -H "Authorization: Bearer $hdr.$pay.$sig" \
+     "https://api.github.com/app/installations/$INST_ID/access_tokens" \
+     | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
 
-   echo '<token>' | podman login ghcr.io -u tedisc-bot --password-stdin
+   git ls-remote "https://x-access-token:${TOKEN}@github.com/eloisewm/TEDISC-Dagster.git"
+   echo "$TOKEN" | podman login ghcr.io -u x-access-token --password-stdin
    podman pull ghcr.io/eloisewm/tedisc-dagster/user-code:latest
    ```
 
-Then run the playbook. Ansible writes the key to `~dagster/.ssh/id_ed25519`
-and the registry credentials to `~dagster/.docker/config.json`, both `0600`.
+6. Configure in `inventory/group_vars/all.yml` (repo URLs must be HTTPS —
+   installation tokens are HTTPS credentials):
+   ```yaml
+   dagster_github_app_id: "123456"
+   dagster_github_app_installations:
+     eloisewm: "12345678"
+     # another-owner: "23456789"   # app must be installed there too
+   dagster_github_app_key_secret_name: dagster_github_app_key
+
+   dagster_instances:
+     - name: ore
+       repo: https://github.com/eloisewm/TEDISC-Dagster.git
+       # github_owner: another-owner   # only if the images' owner differs
+       #                               # from the repo owner
+   ```
+
+Then run the playbook. On the host, `~/.local/bin/github-app-token token
+<owner>` (run as `sa-container`) prints a token for debugging; the owner
+argument is optional when only one installation is configured.
 
 That `.docker` path on a podman host is deliberate. Rootless podman's default
 authfile is `${XDG_RUNTIME_DIR}/containers/auth.json`, under `/run/user/<uid>`
@@ -219,26 +250,28 @@ the instance repo, not this one).
 
 ### Rotating
 
-Deploy key — generate a new one, add it to the repo, then:
+App settings page → Private keys → generate a new key (both keys stay valid
+until one is deleted, so there's no gap), then:
 ```bash
 openstack secret delete <old-href>
-openstack secret store --name dagster_deploy_key --payload_content_type='text/plain' \
-  --payload "$(cat /tmp/new_key)"
+openstack secret store --name dagster_github_app_key \
+  --payload-content-type='text/plain' --payload "$(cat /tmp/new.pem)"
 ```
-Remove the old key from the repo's Deploy keys page and re-run the playbook.
-
-GHCR token — regenerate it in the machine user's token settings, then replace
-`dagster_ghcr_token` in Barbican the same way and re-run.
+Re-run the playbook, confirm a pull works, then delete the old key on the app
+settings page. Revoking is immediate: delete the key there and every token it
+could mint dies with it (existing tokens expire within the hour regardless).
 
 ### Notes
 
-- The clone uses `accept_hostkey: true`, i.e. trust-on-first-use for
-  github.com's host key. The exposure is a first-run-only window and pinning
-  would need maintenance when GitHub rotates keys (as they did in 2023), but
-  it's worth knowing it's a TOFU rather than a pin.
-- `~dagster/.docker/config.json` stores `base64(user:token)` — that's
-  encoding, not encryption. Mode `0600` is what protects it, same as the
-  `.env` files alongside it, which already hold DB passwords.
+- Minting needs `api.github.com` reachable when the deploy timer fires; an
+  outage skips that run the same way a failed pull always has. The ≤1 h token
+  cache smooths transient blips.
+- The JWT the script signs is backdated 60 s against clock skew (GitHub
+  rejects future-dated JWTs); with systemd-timesyncd running this should
+  never matter.
+- `~sa-container/.docker/config.json` no longer contains any secret — just
+  the `credHelpers` wiring. The only durable secret on the host is the app's
+  PEM (`0600`, readable only by `sa-container`).
 
 ## SSH access to the Nectar processing VM
 

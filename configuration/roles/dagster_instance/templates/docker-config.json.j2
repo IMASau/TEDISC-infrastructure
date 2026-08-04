@@ -4,22 +4,16 @@
    This is a podman host, so ~/.docker/ looks like the wrong home for this
    file. It isn't. Rootless podman's default authfile is
    ${XDG_RUNTIME_DIR}/containers/auth.json — i.e. under /run/user/<uid>,
-   which is tmpfs and is wiped on reboot. Credentials written there survive
-   until the first reboot and then the deploy timer starts failing to pull.
+   which is tmpfs and is wiped on reboot. Podman's documented fallback is
+   ~/.docker/config.json, which is persistent and needs no REGISTRY_AUTH_FILE
+   exported into the podman client's environment — which matters because the
+   systemd units ship from the instance repo rather than this one.
 
-   Podman's documented fallback, when the runtime-dir authfile has nothing
-   valid, is ~/.docker/config.json. That path is persistent and needs no
-   REGISTRY_AUTH_FILE exported into the podman client's environment — which
-   matters because the systemd units ship from the instance repo rather than
-   this one, and env_file entries reach the *containers*, not the podman
-   process doing the pull.
-
-   `auth` is base64(username:token) — encoding, not encryption. Mode 0600 is
-   what actually protects it, consistent with the .env files alongside it. #}
+   No credential lives here: `credHelpers` tells podman to run
+   docker-credential-github-app for this registry, which mints a short-lived
+   GitHub App installation token at pull time. #}
 {
-  "auths": {
-    "{{ dagster_registry }}": {
-      "auth": "{{ (dagster_ghcr_username ~ ':' ~ lookup('openstack_secret', dagster_ghcr_token_secret_name)) | b64encode }}"
-    }
+  "credHelpers": {
+    "{{ dagster_registry }}": "github-app"
   }
 }

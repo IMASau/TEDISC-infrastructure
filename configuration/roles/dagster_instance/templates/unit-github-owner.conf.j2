@@ -1,0 +1,11 @@
+# Rendered from roles/dagster_instance/templates/unit-github-owner.conf.j2.
+# Do not hand-edit — changes will be overwritten on the next play run.
+# Instance: {{ instance.name }}
+#
+# podman tells credential helpers only the registry hostname — never the
+# image's owner namespace — so the helper can't pick the right GitHub App
+# installation on its own. Each unit instance carries its owner in the
+# environment instead; podman inherits it and passes it down to the
+# docker-credential-github-app shim.
+[Service]
+Environment=GITHUB_APP_OWNER={{ instance_github_owner }}

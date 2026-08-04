@@ -1,0 +1,14 @@
+# Rendered from roles/dagster_instance/templates/gitconfig.j2.
+# Do not hand-edit — changes will be overwritten on the next play run.
+#
+# The `!` prefix makes git run the helper as a shell command, appending the
+# credential action (get/store/erase). Scoped to github.com so remotes on any
+# other host are untouched. This is what lets both the play-time clone and
+# the deploy timer's later `git pull` fetch over HTTPS with a fresh
+# installation token, without a token ever landing in .git/config.
+# useHttpPath makes git pass the repo path (owner/name.git) to the helper,
+# which needs the owner to pick the right App installation — installations
+# are per GitHub account, and instance repos may belong to different owners.
+[credential "https://github.com"]
+	helper = "!{{ dagster_github_app_token_helper }} git-credential"
+	useHttpPath = true

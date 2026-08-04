@@ -29,32 +29,110 @@
     mode: '0755'
 
 # --- Private repo / registry credentials ------------------------------------
-# Both must be in place before the clone and the service starts below. They
-# also have to persist: `tedisc-deploy@<name>.timer` re-pulls the repo and
-# images long after this play has finished, so a play-time-only credential
-# isn't enough.
+# One GitHub App installation covers both the clones and the ghcr.io pulls.
+# Installation tokens expire after an hour, and `tedisc-deploy@<name>.timer`
+# re-pulls the repo and images long after this play has finished — so no
+# token is installed here. Instead the App's private key goes on disk and
+# git/podman mint a token at pull time, each through a credential helper
+# backed by the same script. Everything below must be in place before the
+# clone tasks run.
 
-- name: Ensure the dagster user's .ssh directory exists
+- name: Ensure the GitHub App configuration is complete
+  ansible.builtin.assert:
+    that:
+      - dagster_github_app_id | string | length > 0
+      - dagster_github_app_installations | length > 0
+    fail_msg: >-
+      dagster_github_app_key_secret_name is set but dagster_github_app_id /
+      dagster_github_app_installations are not. See group_vars/all.yml.
+  when: dagster_github_app_key_secret_name | length > 0
+
+- name: Ensure the GitHub App key directory exists
   ansible.builtin.file:
-    path: "{{ dagster_deploy_key_path | dirname }}"
+    path: "{{ dagster_github_app_key_path | dirname }}"
     state: directory
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
     mode: '0700'
-  when: dagster_deploy_key_secret_name | length > 0
+  when: dagster_github_app_key_secret_name | length > 0
 
-- name: Install the read-only deploy key for the instance repos
+- name: Install the GitHub App private key
   ansible.builtin.copy:
-    # Trimmed then re-terminated: ssh rejects a key file with no trailing
-    # newline ("invalid format"), and Barbican payloads may or may not carry
-    # one depending on how they were stored.
-    content: "{{ lookup('openstack_secret', dagster_deploy_key_secret_name) | trim }}\n"
-    dest: "{{ dagster_deploy_key_path }}"
+    # Trimmed then re-terminated: Barbican payloads may or may not carry a
+    # trailing newline depending on how they were stored; normalising keeps
+    # the copy idempotent across runs.
+    content: "{{ lookup('openstack_secret', dagster_github_app_key_secret_name) | trim }}\n"
+    dest: "{{ dagster_github_app_key_path }}"
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
     mode: '0600'
   no_log: true
-  when: dagster_deploy_key_secret_name | length > 0
+  when: dagster_github_app_key_secret_name | length > 0
+
+- name: Ensure the dagster user's ~/.local/bin exists
+  ansible.builtin.file:
+    path: "{{ dagster_github_app_token_helper | dirname }}"
+    state: directory
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0755'
+  when: dagster_github_app_key_secret_name | length > 0
+
+- name: Install the GitHub App token helper
+  ansible.builtin.template:
+    src: github-app-token.sh.j2
+    dest: "{{ dagster_github_app_token_helper }}"
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0755'
+  when: dagster_github_app_key_secret_name | length > 0
+
+- name: Install the podman credential-helper shim
+  ansible.builtin.template:
+    src: docker-credential-github-app.j2
+    dest: "{{ dagster_github_app_token_helper | dirname }}/docker-credential-github-app"
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0755'
+  when: dagster_github_app_key_secret_name | length > 0
+
+# The shim above is found via PATH, and the units' default PATH excludes
+# ~/.local/bin — see unit-path.conf.j2 for why a drop-in (and not
+# environment.d) is the fix. Covers both units that run podman:
+# tedisc-deploy@ pulls on the timer, tedisc@ pulls at (re)start.
+- name: Ensure unit drop-in directories exist
+  ansible.builtin.file:
+    path: "{{ dagster_home_dir }}/.config/systemd/user/{{ item }}.d"
+    state: directory
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0755'
+  loop:
+    - "tedisc@.service"
+    - "tedisc-deploy@.service"
+  when: dagster_github_app_key_secret_name | length > 0
+
+- name: Extend unit PATH so podman finds the credential helper
+  ansible.builtin.template:
+    src: unit-path.conf.j2
+    dest: "{{ dagster_home_dir }}/.config/systemd/user/{{ item }}.d/50-credential-helper-path.conf"
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0644'
+  loop:
+    - "tedisc@.service"
+    - "tedisc-deploy@.service"
+  when: dagster_github_app_key_secret_name | length > 0
+  notify: reload dagster user systemd
+
+- name: Point git at the token helper for github.com
+  ansible.builtin.template:
+    src: gitconfig.j2
+    dest: "{{ dagster_home_dir }}/.gitconfig"
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0644'
+  when: dagster_github_app_key_secret_name | length > 0
 
 - name: Ensure the dagster user's registry auth directory exists
   ansible.builtin.file:
@@ -63,20 +141,16 @@
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
     mode: '0700'
-  when: dagster_ghcr_token_secret_name | length > 0
+  when: dagster_github_app_key_secret_name | length > 0
 
-# Templated rather than `podman/docker login`: a template is idempotent without
-# changed_when gymnastics, and `podman login` would put the token in argv
-# where it shows up in the process list.
-- name: Install registry credentials for pulling private images
+- name: Point podman at the credential helper for the registry
   ansible.builtin.template:
     src: docker-config.json.j2
     dest: "{{ dagster_home_dir }}/.docker/config.json"
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
     mode: '0600'
-  no_log: true
-  when: dagster_ghcr_token_secret_name | length > 0
+  when: dagster_github_app_key_secret_name | length > 0
 
 # First pass: clone every instance's repo. The systemd unit files come from
 # one of these checkouts (they're identical across repos per the multi-
@@ -88,7 +162,6 @@
     dest: "{{ dagster_instances_root }}/{{ instance.name }}"
     version: "{{ instance.branch | default('main') }}"
     # update: false     # deploy-update.sh handles subsequent pulls
-    accept_hostkey: true
   loop: "{{ dagster_instances }}"
   loop_control:
     loop_var: instance

@@ -8,26 +8,42 @@ dagster_instances_root: "/home/{{ dagster_user }}/dagster-instances"
 dagster_instances: []
 
 # --- Private repo / registry access -----------------------------------------
-# Both are empty by default: a public repo and public images need no
-# credentials, and an empty name skips the corresponding task entirely.
+# All empty by default: a public repo and public images need no credentials,
+# and an empty secret name skips every credential task.
 
-# Barbican secret holding the PEM private half of a read-only GitHub deploy
-# key for the instance repos. Read-only and scoped to a single repo, unlike a
-# classic PAT (whose `repo` scope grants write to *every* repo the owning
-# account can see). Requires the `repo:` URLs to be SSH, not HTTPS.
-dagster_deploy_key_secret_name: ""
-dagster_deploy_key_path: "/home/{{ dagster_user }}/.ssh/id_ed25519"
+# One GitHub App installation covers both the clones (contents: read) and the
+# ghcr.io image pulls (packages: read), replacing the old deploy-key + classic
+# PAT pair. Its private key mints installation tokens that are read-only,
+# scoped to the repos the installation grants, and expire after an hour — so
+# tokens are minted on-host at pull time (see github-app-token.sh.j2) rather
+# than installed by this role. Requires the instance `repo:` URLs to be
+# HTTPS, not SSH.
+#
+# App ID and installation IDs are not secrets: the app's settings page shows
+# the former, each installation's URL (…/settings/installations/<id>) the
+# latter.
+dagster_github_app_id: ""
 
-# Barbican secret holding a GitHub personal access token (classic) with only
-# the `read:packages` scope, for pulling private images. A deploy key cannot
-# be used here — image pulls are OCI-over-HTTPS with bearer tokens, which has
-# no SSH transport to plug a key into. GHCR does not accept fine-grained
-# PATs; classic is the only option.
-dagster_ghcr_token_secret_name: ""
+# Map of repo/package owner -> the app's installation id on that account.
+# Installations are per GitHub *account*, so instance repos owned by
+# different users/orgs need the app installed on each; one entry then covers
+# every repo that installation grants. When the map has exactly one entry it
+# doubles as the default owner wherever one can't be named.
+dagster_github_app_installations: {}
 
-# GHCR ignores the username when the password is a PAT, but it must be
-# non-empty. Name it after the machine user that owns the token.
-dagster_ghcr_username: "tedisc-bot"
+# Barbican secret holding the App's PEM private key.
+dagster_github_app_key_secret_name: ""
+dagster_github_app_key_path: "/home/{{ dagster_user }}/.config/github-app/key.pem"
+
+# The mint-and-cache script, which also backs both credential helpers. In the
+# dagster user's home — this role has no root on the target, so nothing can
+# go in /usr/local/bin. podman resolves `credHelpers` entries against the
+# PATH of the pulling process, and the systemd user units get a default PATH
+# without ~/.local/bin, so the role also installs per-unit drop-ins that
+# prepend it (see unit-path.conf.j2). dagster_home_dir is a fact set at the
+# top of tasks/main.yml; defaults are evaluated lazily, so referencing it
+# here is fine and spares a group_vars override for the /srv home.
+dagster_github_app_token_helper: "{{ dagster_home_dir }}/.local/bin/github-app-token"
 
 dagster_registry: ghcr.io
 
