@@ -1,0 +1,27 @@
+---
+- name: Check installed gh version
+  ansible.builtin.command: "{{ gh_binary_path }} --version"
+  register: gh_installed
+  changed_when: false
+  failed_when: false
+
+- name: Ensure the install directory exists
+  ansible.builtin.file:
+    path: "{{ gh_install_dir }}"
+    state: directory
+    mode: '0755'
+
+# The release tarball nests the binary as gh_<ver>_<arch>/bin/gh;
+# --strip-components=2 drops the wrapping directories so the bare `gh`
+# lands in the install directory.
+- name: Download and extract gh binary
+  ansible.builtin.unarchive:
+    src: "{{ gh_binary_url }}"
+    dest: "{{ gh_install_dir }}"
+    remote_src: true
+    include:
+      - "gh_{{ gh_version }}_{{ gh_binary_arch }}/bin/gh"
+    extra_opts:
+      - --strip-components=2
+    mode: '0755'
+  when: gh_version not in (gh_installed.stdout | default(''))

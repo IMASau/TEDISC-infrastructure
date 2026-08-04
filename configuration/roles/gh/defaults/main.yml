@@ -1,0 +1,11 @@
+---
+# Version pinned to a specific release. Bump manually — releases live at
+# https://github.com/cli/cli/releases.
+gh_version: "2.97.0"
+gh_binary_arch: linux_amd64
+gh_binary_url: "https://github.com/cli/cli/releases/download/v{{ gh_version }}/gh_{{ gh_version }}_{{ gh_binary_arch }}.tar.gz"
+
+# Installed per-user rather than system-wide, into the home directory of
+# whichever user the role runs as (via the play's become_user).
+gh_install_dir: "{{ ansible_env.HOME }}/.local/bin"
+gh_binary_path: "{{ gh_install_dir }}/gh"
