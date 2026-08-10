@@ -97,12 +97,12 @@ caddy_key_file: "/var/lib/lego/certificates/_.dagster.ore-tedisc.cloud.edu.au.ke
 # packages:read) covers both: its private key is stored in Barbican, and the
 # host mints short-lived installation tokens at pull time via git/podman
 # credential helpers — nothing longer-lived than the key itself is on disk.
-dagster_github_app_id: "REPLACE_ME"  # app settings page → App ID
+dagster_github_app_id: "4470953"  # app settings page → App ID
 # Owner -> installation id. Installations are per GitHub account, so if a
 # future instance repo belongs to a different user/org, install the app
 # there too and add its entry (…/settings/installations/<id>).
 dagster_github_app_installations:
-  eloisewm: "REPLACE_ME"
+  eloisewm: "151318433"
 dagster_github_app_key_secret_name: dagster_github_app_key
 
 dagster_user: sa-container
