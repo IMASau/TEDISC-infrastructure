@@ -147,6 +147,4 @@ dagster_instances:
       DAGSTER_POSTGRES_PASSWORD: ore_dagster_postgres_password
       DB_USER: ore_db_user
       DB_PASSWORD: ore_db_password
-      DAGSTER_AUTH_SECRET_KEY: ore_dagster_auth_secret_key
-      DAGSTER_AUTH_ADMIN_PASSWORD: ore_dagster_auth_admin_password
 # Later; name: mh or macharbour
