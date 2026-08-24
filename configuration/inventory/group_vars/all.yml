@@ -102,7 +102,7 @@ dagster_github_app_id: "4470953"  # app settings page → App ID
 # future instance repo belongs to a different user/org, install the app
 # there too and add its entry (…/settings/installations/<id>).
 dagster_github_app_installations:
-  eloisewm: "151318433"
+  IMASau: "156096839"
 dagster_github_app_key_secret_name: dagster_github_app_key
 
 dagster_user: sa-container
@@ -127,7 +127,7 @@ dagster_instances:
     # HTTPS, not SSH — installation tokens are HTTPS credentials. The
     # credential helper supplies them at pull time, so no token is ever
     # written into .git/config on disk.
-    repo: https://github.com/eloisewm/TEDISC-Dagster.git
+    repo: https://github.com/IMASau/imas-ore.git
     port: 3004
     subdomain: ore.dagster.ore-tedisc.cloud.edu.au
     user_code_image: ghcr.io/eloisewm/tedisc-dagster/user-code:latest
