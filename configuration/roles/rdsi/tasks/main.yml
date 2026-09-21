@@ -1,0 +1,14 @@
+---
+# Mount RDSI directory:
+- name: Create directory for RDSI mount point
+  ansible.builtin.file:
+    path: /mnt/rdsi
+    state: directory
+    owner: "{{ processing_user }}"
+    group: "{{ processing_user_group }}"
+    mode: "0775"
+
+- name: Ensure RDSI is mounted
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "data5.tpac.org.au:/rd1/imas/IMASTrusted /mnt/rdsi nfs rw,nosuid,noexec,nodev,hard,intr,bg,proto=tcp 0 0"

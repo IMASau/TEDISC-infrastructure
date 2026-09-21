@@ -5,4 +5,5 @@
   roles:
     - bootstrap
     - processing_user
+    - rdsi
     - r_lang

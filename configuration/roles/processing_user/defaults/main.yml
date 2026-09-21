@@ -2,7 +2,12 @@
 # Dedicated service user the dagster pipelines SSH in as (the value of the
 # NECTAR_SSH_USER env var on the dagster side).
 processing_user: svc-dagster
+processing_user_group: "{{ processing_user }}"
 processing_user_shell: /bin/bash
+
+# The uid/gid are set by the NFS server:
+processing_user_uid: 380028
+processing_user_gid: 1015
 
 # Barbican secret holding the OpenSSH *public* half of the keypair whose
 # private half the dagster_instance role installs next to each checkout.

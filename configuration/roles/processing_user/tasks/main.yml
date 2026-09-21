@@ -1,4 +1,10 @@
 ---
+# We need to match the user and group ids provided by the NFS server:
+- name: Create user group to match NFS/rdsi
+  ansible.builtin.group:
+    name: "{{ processing_user_group }}"
+    gid: "{{ processing_user_gid }}"
+
 # Unlike the dagster_user role this user only receives SSH connections, so no
 # lingering or subuid/subgid allocation is needed.
 - name: Create processing service user
@@ -8,6 +14,8 @@
     system: true
     create_home: true
     state: present
+    uid: "{{ processing_user_uid }}"
+    group: "{{ processing_user_group }}"
 
 # The lookup runs on the controller, with the same OS_* / clouds.yaml auth as
 # every other openstack_secret use in this repo.

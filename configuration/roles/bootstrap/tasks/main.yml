@@ -10,6 +10,7 @@
       # to unprivileged users when using `become_user`. Without it,
       # `become_user: <non-root>` fails on minimal images.
       - acl
+      - nfs-common              # for mounting rdsi
     state: present
     update_cache: true
     cache_valid_time: 3600
