@@ -98,7 +98,8 @@ resource "openstack_compute_instance_v2" "vm" {
     var.security_groups,
     [
       openstack_networking_secgroup_v2.ssh.name,
-      openstack_networking_secgroup_v2.web.name,
+      # No Web access now; only private access via SSH
+      # openstack_networking_secgroup_v2.web.name,
     ],
   )
 
