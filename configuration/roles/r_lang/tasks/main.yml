@@ -83,7 +83,7 @@
       - -e
       - install.packages("remotes")
     creates: "/usr/local/lib/R/site-library/remotes"
-  when: r_lang_github_packages
+  when: r_lang_github_packages is defined
 
 - name: Install R packages from github
   ansible.builtin.command:
@@ -94,4 +94,4 @@
     # item format is username/package but it only *creates* "package":
     creates: "/usr/local/lib/R/site-library/{{ item | split('/') | last }}"
   loop: "{{ r_lang_github_packages }}"
-
+  when: r_lang_github_packages is defined
