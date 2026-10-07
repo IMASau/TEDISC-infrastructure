@@ -9,43 +9,32 @@ dagster_instances: []
 
 # --- Private repo / registry access -----------------------------------------
 # All empty by default: a public repo and public images need no credentials,
-# and an empty secret name skips every credential task.
+# and an empty token secret name skips every credential task.
 
-# One GitHub App installation covers both the clones (contents: read) and the
-# ghcr.io image pulls (packages: read), replacing the old deploy-key + classic
-# PAT pair. Its private key mints installation tokens that are read-only,
-# scoped to the repos the installation grants, and expire after an hour — so
-# tokens are minted on-host at pull time (see github-app-token.sh.j2) rather
-# than installed by this role. Requires the instance `repo:` URLs to be
-# HTTPS, not SSH.
+# Gitea uses one identity for both git-over-HTTPS and its container
+# registry, so a single bot user with a read-only access token covers the
+# clones and the image pulls. Gitea has no SSH access on our host and no
+# short-lived machine tokens (nothing like a GitHub App installation token),
+# so the token itself is the durable credential: it lives in Barbican and the
+# role renders it into git's and podman's stock credential files, which
+# `tedisc-deploy@<name>.timer` then uses long after the play has finished.
+# Requires the instance `repo:` URLs to be HTTPS.
 #
-# App ID and installation IDs are not secrets: the app's settings page shows
-# the former, each installation's URL (…/settings/installations/<id>) the
-# latter.
-dagster_github_app_id: ""
+# The bot user whose token is used. Not a secret. The user must be a member
+# of (or collaborator on) every owner whose repos/images the instances need;
+# token scopes only restrict what membership already grants.
+dagster_gitea_user: ""
 
-# Map of repo/package owner -> the app's installation id on that account.
-# Installations are per GitHub *account*, so instance repos owned by
-# different users/orgs need the app installed on each; one entry then covers
-# every repo that installation grants. When the map has exactly one entry it
-# doubles as the default owner wherever one can't be named.
-dagster_github_app_installations: {}
+# Barbican secret holding the bot user's access token (scopes:
+# read:repository, read:package).
+dagster_gitea_token_secret_name: ""
 
-# Barbican secret holding the App's PEM private key.
-dagster_github_app_key_secret_name: ""
-dagster_github_app_key_path: "/home/{{ dagster_user }}/.config/github-app/key.pem"
-
-# The mint-and-cache script, which also backs both credential helpers. In the
-# dagster user's home — this role has no root on the target, so nothing can
-# go in /usr/local/bin. podman resolves `credHelpers` entries against the
-# PATH of the pulling process, and the systemd user units get a default PATH
-# without ~/.local/bin, so the role also installs per-unit drop-ins that
-# prepend it (see unit-path.conf.j2). dagster_home_dir is a fact set at the
-# top of tasks/main.yml; defaults are evaluated lazily, so referencing it
-# here is fine and spares a group_vars override for the /srv home.
-dagster_github_app_token_helper: "{{ dagster_home_dir }}/.local/bin/github-app-token"
-
-dagster_registry: ghcr.io
+# Hostname (no scheme; include the port if non-standard) of the Gitea
+# instance. Gitea serves git and the container registry on the same host,
+# so this scopes both the git credential and podman's registry auth. The
+# instance `repo:` URLs and image paths are written out in full in
+# group_vars and must use this host.
+dagster_registry: ""
 
 # Barbican secret holding the private half of the keypair whose public half
 # the processing_user role installs on the Nectar processing VM. Written next

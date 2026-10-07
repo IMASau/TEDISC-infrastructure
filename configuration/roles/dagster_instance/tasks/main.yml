@@ -29,110 +29,50 @@
     mode: '0755'
 
 # --- Private repo / registry credentials ------------------------------------
-# One GitHub App installation covers both the clones and the ghcr.io pulls.
-# Installation tokens expire after an hour, and `tedisc-deploy@<name>.timer`
-# re-pulls the repo and images long after this play has finished — so no
-# token is installed here. Instead the App's private key goes on disk and
-# git/podman mint a token at pull time, each through a credential helper
-# backed by the same script. Everything below must be in place before the
-# clone tasks run.
+# One Gitea bot-user token covers both the clones and the image pulls: Gitea
+# accepts the same access token for git-over-HTTPS and its container
+# registry. The token is long-lived (Gitea tokens don't expire), and
+# `tedisc-deploy@<name>.timer` re-pulls the repo and images long after this
+# play has finished — so it goes into git's and podman's stock credential
+# files, which both tools read on their own at pull time. Everything below
+# must be in place before the clone tasks run.
 
-- name: Ensure the GitHub App configuration is complete
+- name: Ensure the Gitea configuration is complete
   ansible.builtin.assert:
     that:
-      - dagster_github_app_id | string | length > 0
-      - dagster_github_app_installations | length > 0
+      - dagster_registry | length > 0
+      - dagster_gitea_user | length > 0
     fail_msg: >-
-      dagster_github_app_key_secret_name is set but dagster_github_app_id /
-      dagster_github_app_installations are not. See group_vars/all.yml.
-  when: dagster_github_app_key_secret_name | length > 0
+      dagster_gitea_token_secret_name is set but dagster_registry /
+      dagster_gitea_user are not. See group_vars/all.yml.
+  when: dagster_gitea_token_secret_name | length > 0
 
-- name: Ensure the GitHub App key directory exists
-  ansible.builtin.file:
-    path: "{{ dagster_github_app_key_path | dirname }}"
-    state: directory
-    owner: "{{ dagster_user }}"
-    group: "{{ dagster_user }}"
-    mode: '0700'
-  when: dagster_github_app_key_secret_name | length > 0
-
-- name: Install the GitHub App private key
-  ansible.builtin.copy:
-    # Trimmed then re-terminated: Barbican payloads may or may not carry a
-    # trailing newline depending on how they were stored; normalising keeps
-    # the copy idempotent across runs.
-    content: "{{ lookup('openstack_secret', dagster_github_app_key_secret_name) | trim }}\n"
-    dest: "{{ dagster_github_app_key_path }}"
-    owner: "{{ dagster_user }}"
-    group: "{{ dagster_user }}"
-    mode: '0600'
+# Fetched once rather than looked up inside each template: one Barbican
+# round-trip, and the templates stay free of lookup calls.
+- name: Fetch the Gitea access token
+  ansible.builtin.set_fact:
+    dagster_gitea_token: "{{ lookup('openstack_secret', dagster_gitea_token_secret_name) | trim }}"
   no_log: true
-  when: dagster_github_app_key_secret_name | length > 0
+  when: dagster_gitea_token_secret_name | length > 0
 
-- name: Ensure the dagster user's ~/.local/bin exists
-  ansible.builtin.file:
-    path: "{{ dagster_github_app_token_helper | dirname }}"
-    state: directory
-    owner: "{{ dagster_user }}"
-    group: "{{ dagster_user }}"
-    mode: '0755'
-  when: dagster_github_app_key_secret_name | length > 0
-
-- name: Install the GitHub App token helper
-  ansible.builtin.template:
-    src: github-app-token.sh.j2
-    dest: "{{ dagster_github_app_token_helper }}"
-    owner: "{{ dagster_user }}"
-    group: "{{ dagster_user }}"
-    mode: '0755'
-  when: dagster_github_app_key_secret_name | length > 0
-
-- name: Install the podman credential-helper shim
-  ansible.builtin.template:
-    src: docker-credential-github-app.j2
-    dest: "{{ dagster_github_app_token_helper | dirname }}/docker-credential-github-app"
-    owner: "{{ dagster_user }}"
-    group: "{{ dagster_user }}"
-    mode: '0755'
-  when: dagster_github_app_key_secret_name | length > 0
-
-# The shim above is found via PATH, and the units' default PATH excludes
-# ~/.local/bin — see unit-path.conf.j2 for why a drop-in (and not
-# environment.d) is the fix. Covers both units that run podman:
-# tedisc-deploy@ pulls on the timer, tedisc@ pulls at (re)start.
-- name: Ensure unit drop-in directories exist
-  ansible.builtin.file:
-    path: "{{ dagster_home_dir }}/.config/systemd/user/{{ item }}.d"
-    state: directory
-    owner: "{{ dagster_user }}"
-    group: "{{ dagster_user }}"
-    mode: '0755'
-  loop:
-    - "tedisc@.service"
-    - "tedisc-deploy@.service"
-  when: dagster_github_app_key_secret_name | length > 0
-
-- name: Extend unit PATH so podman finds the credential helper
-  ansible.builtin.template:
-    src: unit-path.conf.j2
-    dest: "{{ dagster_home_dir }}/.config/systemd/user/{{ item }}.d/50-credential-helper-path.conf"
-    owner: "{{ dagster_user }}"
-    group: "{{ dagster_user }}"
-    mode: '0644'
-  loop:
-    - "tedisc@.service"
-    - "tedisc-deploy@.service"
-  when: dagster_github_app_key_secret_name | length > 0
-  notify: reload dagster user systemd
-
-- name: Point git at the token helper for github.com
+- name: Point git at the stored credential for the Gitea host
   ansible.builtin.template:
     src: gitconfig.j2
     dest: "{{ dagster_home_dir }}/.gitconfig"
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
     mode: '0644'
-  when: dagster_github_app_key_secret_name | length > 0
+  when: dagster_gitea_token_secret_name | length > 0
+
+- name: Install the git credential for the Gitea host
+  ansible.builtin.template:
+    src: git-credentials.j2
+    dest: "{{ dagster_home_dir }}/.git-credentials"
+    owner: "{{ dagster_user }}"
+    group: "{{ dagster_user }}"
+    mode: '0600'
+  no_log: true
+  when: dagster_gitea_token_secret_name | length > 0
 
 - name: Ensure the dagster user's registry auth directory exists
   ansible.builtin.file:
@@ -141,16 +81,36 @@
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
     mode: '0700'
-  when: dagster_github_app_key_secret_name | length > 0
+  when: dagster_gitea_token_secret_name | length > 0
 
-- name: Point podman at the credential helper for the registry
+- name: Install the registry credential for podman
   ansible.builtin.template:
     src: docker-config.json.j2
     dest: "{{ dagster_home_dir }}/.docker/config.json"
     owner: "{{ dagster_user }}"
     group: "{{ dagster_user }}"
     mode: '0600'
-  when: dagster_github_app_key_secret_name | length > 0
+  no_log: true
+  when: dagster_gitea_token_secret_name | length > 0
+
+# --- Retire the GitHub App machinery ----------------------------------------
+# Until 2026-10 the host minted GitHub App installation tokens at pull time
+# via a helper script, a podman credential-helper shim, and per-unit PATH
+# drop-ins. None of that is wanted against Gitea. The drop-in directories
+# only ever held files this role wrote, so removing them whole is safe.
+# This block can be deleted once every managed host has run it.
+- name: Remove retired GitHub App artifacts
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ dagster_home_dir }}/.config/github-app"
+    - "{{ dagster_home_dir }}/.cache/github-app"
+    - "{{ dagster_home_dir }}/.local/bin/github-app-token"
+    - "{{ dagster_home_dir }}/.local/bin/docker-credential-github-app"
+    - "{{ dagster_home_dir }}/.config/systemd/user/tedisc@.service.d"
+    - "{{ dagster_home_dir }}/.config/systemd/user/tedisc-deploy@.service.d"
+  notify: reload dagster user systemd
 
 # First pass: clone every instance's repo. The systemd unit files come from
 # one of these checkouts (they're identical across repos per the multi-

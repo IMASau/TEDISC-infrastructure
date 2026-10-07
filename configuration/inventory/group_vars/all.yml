@@ -24,9 +24,9 @@
 # Fields per entry:
 #   name             required, unique short slug (used for compose project,
 #                    checkout dir, systemd instance name, container/volume prefix)
-#   repo             required, git URL to clone. HTTPS (https://github.com/...)
-#                    — private repos authenticate through the GitHub App
-#                    credential helper (see dagster_github_app_* below).
+#   repo             required, git URL to clone. HTTPS (the Gitea host has
+#                    no SSH) — private repos authenticate with the bot
+#                    user's stored credential (see dagster_gitea_* below).
 #   branch           optional, defaults to "main"
 #   port             required, host-side port the webserver is mapped to
 #   subdomain        required, FQDN Caddy serves TLS for
@@ -34,23 +34,20 @@
 #   secrets          optional, map of env-var-name -> Barbican secret name
 #                    (fetched at play time via the openstack_secret lookup)
 #   user_code_image  optional, overrides the compose-default USER_CODE_IMAGE
-#                    tag (e.g. "ghcr.io/owner/tedisc-user-code:v1.2.3" to
-#                    pull instead of build)
+#                    tag (e.g. "<gitea-host>/owner/tedisc-user-code:v1.2.3"
+#                    to pull instead of build; Gitea lowercases the owner in
+#                    image paths)
 #   dagster_image    optional, overrides the compose-default DAGSTER_IMAGE
 #                    tag used by the webserver and daemon services
 #   deploy_mode      optional, "git" (default) or "registry" — how
 #                    deploy-update.sh keeps the stack current
-#   github_owner     optional, account owning the ghcr.io images when that
-#                    differs from the repo owner (defaults to the repo
-#                    owner); must have an entry in
-#                    dagster_github_app_installations
 #   docker_network   optional, overrides the default network name
 #                    (${name}_default); rarely needed
 #
 # Example:
 # dagster_instances:
 #   - name: d1
-#     repo: https://github.com/eloisewm/TEDISC-Dagster.git
+#     repo: https://gitea.example.edu.au/eloisewm/TEDISC-Dagster.git
 #     port: 3004
 #     subdomain: d1.dagster.ore-tedisc.cloud.edu.au
 #     env:
@@ -68,7 +65,7 @@
 #       # First-boot password for the auto-created `admin` user.
 #       DAGSTER_AUTH_ADMIN_PASSWORD: d1_dagster_auth_admin_password
 #   - name: d2
-#     repo: https://github.com/eloisewm/TEDISC-Dagster.git
+#     repo: https://gitea.example.edu.au/eloisewm/TEDISC-Dagster.git
 #     branch: staging
 #     port: 3008
 #     subdomain: d2.dagster.ore-tedisc.cloud.edu.au
@@ -91,23 +88,23 @@ caddy_cert_file: "/var/lib/lego/certificates/_.dagster.ore-tedisc.cloud.edu.au.c
 caddy_key_file: "/var/lib/lego/certificates/_.dagster.ore-tedisc.cloud.edu.au.key"
 
 # --- Private repo / registry access -----------------------------------------
-# TEDISC-Dagster is private, so both the clone and the image pulls need
-# credentials on the host. See configuration/README.md for the one-time
-# GitHub-side setup. A single GitHub App installation (contents:read +
-# packages:read) covers both: its private key is stored in Barbican, and the
-# host mints short-lived installation tokens at pull time via git/podman
-# credential helpers — nothing longer-lived than the key itself is on disk.
-dagster_github_app_id: "4470953"  # app settings page → App ID
-# Owner -> installation id. Installations are per GitHub account, so if a
-# future instance repo belongs to a different user/org, install the app
-# there too and add its entry (…/settings/installations/<id>).
-dagster_github_app_installations:
-  IMASau: "156096839"
-dagster_github_app_key_secret_name: dagster_github_app_key
+# The instance repos and images are private on Gitea, so both the clone and
+# the image pulls need credentials on the host. See configuration/README.md
+# for the one-time Gitea-side setup. A single bot user covers both: its
+# read-only access token (read:repository + read:package) is stored in
+# Barbican and rendered into the dagster user's ~/.git-credentials and
+# ~/.docker/config.json. One token covers every owner the bot user can see,
+# so there is no per-owner configuration.
+#
+# FIXME: fill in the Gitea hostname and bot username once the Gitea side is
+# set up. The play refuses to run while the host is empty. Repo URLs and
+# image paths below are written out in full and must use the same host.
+dagster_registry: ""
+dagster_gitea_user: "tedisc-deploy"
+dagster_gitea_token_secret_name: dagster_gitea_token
 
 dagster_user: sa-container
 dagster_instances_root: "/srv/{{ dagster_user }}/dagster-instances"
-dagster_github_app_key_path: "/srv/{{ dagster_user }}/.config/github-app/key.pem"
 
 # --- Nectar processing VM SSH access -----------------------------------------
 # The dagster pipelines SSH into the processing VM as a dedicated service
@@ -124,16 +121,20 @@ dagster_nectar_ssh_key_secret_name: nectar_ssh_private_key
 
 dagster_instances:
   - name: ore
-    # HTTPS, not SSH — installation tokens are HTTPS credentials. The
-    # credential helper supplies them at pull time, so no token is ever
-    # written into .git/config on disk.
-    repo: https://github.com/IMASau/imas-ore.git
+    # HTTPS, not SSH (the Gitea host offers none). git reads the bot user's
+    # stored credential at pull time, so no token is ever written into
+    # .git/config on disk.
+    # FIXME: real Gitea host, and confirm the owner the repo and images
+    # land under in Gitea.
+    repo: https://gitea.example.edu.au/IMASau/imas-ore.git
     port: 3004
     subdomain: ore.dagster.ore-tedisc.cloud.edu.au
-    user_code_image: ghcr.io/eloisewm/tedisc-dagster/user-code:latest
-    dagster_image: ghcr.io/eloisewm/tedisc-dagster/dagster:latest
+    user_code_image: gitea.example.edu.au/imasau/tedisc-dagster/user-code:latest
+    dagster_image: gitea.example.edu.au/imasau/tedisc-dagster/dagster:latest
     env:
       BLA_FILEPATH: /opt/dagster/app/Datasets/BirdLifeAustralia/bla_output_csiro_290525.csv
+      # FIXME: ALA?
+      ALA_FILEPATH: /opt/dagster/app/Datasets/BirdLifeAustralia/bla_output_csiro_290525.csv
       DB_HOST: testimasag3.its.utas.edu.au
       DB_PORT: '1433'
       DB_NAME: IMASOREMonitoring

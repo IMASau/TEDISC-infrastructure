@@ -1,6 +1,6 @@
 ---
-# Same trim-then-re-terminate treatment as the deploy key in main.yml: ssh
-# rejects a key file with no trailing newline. The file sits untracked in the
+# Trimmed then re-terminated: Barbican payloads may or may not carry a
+# trailing newline, and ssh rejects a key file without one. The file sits untracked in the
 # checkout (like .env below), which git pulls leave alone.
 - name: "[{{ instance.name }}] Install the Nectar SSH private key"
   become_user: "{{ dagster_user }}"
@@ -22,38 +22,16 @@
     group: "{{ dagster_user }}"
     mode: '0600'
 
-# The image owner defaults to the repo owner, parsed from the HTTPS URL;
-# an explicit `github_owner:` on the instance overrides it (e.g. images
-# published under a different account than the code).
-- name: "[{{ instance.name }}] Ensure instance unit drop-in directories exist"
+# Retired GitHub App plumbing: each unit instance used to carry its image
+# owner in an environment drop-in. Gitea needs no owner resolution, so the
+# drop-in directories go. Deletable once every managed host has run it.
+- name: "[{{ instance.name }}] Remove retired GitHub App unit drop-ins"
   ansible.builtin.file:
     path: "{{ dagster_home_dir }}/.config/systemd/user/{{ item }}{{ instance.name }}.service.d"
-    state: directory
-    owner: "{{ dagster_user }}"
-    group: "{{ dagster_user }}"
-    mode: '0755'
+    state: absent
   loop:
     - "tedisc@"
     - "tedisc-deploy@"
-  when: dagster_github_app_key_secret_name | length > 0
-
-- name: "[{{ instance.name }}] Set the GitHub App owner for unit pulls"
-  vars:
-    instance_github_owner: >-
-      {{ instance.github_owner
-         | default(instance.repo
-                   | regex_replace('^https://github\.com/', '')
-                   | regex_replace('/.*$', '')) }}
-  ansible.builtin.template:
-    src: unit-github-owner.conf.j2
-    dest: "{{ dagster_home_dir }}/.config/systemd/user/{{ item }}{{ instance.name }}.service.d/50-github-app-owner.conf"
-    owner: "{{ dagster_user }}"
-    group: "{{ dagster_user }}"
-    mode: '0644'
-  loop:
-    - "tedisc@"
-    - "tedisc-deploy@"
-  when: dagster_github_app_key_secret_name | length > 0
   notify: reload dagster user systemd
 
 # Flush so the daemon-reload lands before the enable/start below spawns

@@ -9,11 +9,13 @@
    exported into the podman client's environment — which matters because the
    systemd units ship from the instance repo rather than this one.
 
-   No credential lives here: `credHelpers` tells podman to run
-   docker-credential-github-app for this registry, which mints a short-lived
-   GitHub App installation token at pull time. #}
+   The `auth` value is the same base64("user:token") that `podman login`
+   would write; rendering it here means no login step and nothing to redo
+   after a reboot. #}
 {
-  "credHelpers": {
-    "{{ dagster_registry }}": "github-app"
+  "auths": {
+    "{{ dagster_registry }}": {
+      "auth": "{{ (dagster_gitea_user ~ ':' ~ dagster_gitea_token) | b64encode }}"
+    }
   }
 }

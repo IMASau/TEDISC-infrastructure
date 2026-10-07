@@ -124,122 +124,35 @@ Then re-run the playbook; the templated env file is overwritten and lego picks u
 
 ## Private instance repos and images
 
-`TEDISC-Dagster` is private, and its images on `ghcr.io` should be too. Both
-the clone and the image pulls authenticate through a single **GitHub App**
-installation with two read-only permissions:
+The instance repos and their images live on a self-hosted **Gitea**, and are
+private. Both the clone and the image pulls authenticate as a single
+read-only **bot user**:
 
-- **`contents: read`** — the clones and `git pull`s (over HTTPS).
-- **`packages: read`** — the `ghcr.io` image pulls.
+- Gitea accepts the same access token for git-over-HTTPS and for its
+  container registry, so one credential covers both.
+- The Gitea host offers no SSH, so deploy keys are out; everything is HTTPS.
+- Gitea has nothing like a GitHub App's short-lived installation tokens (no
+  deploy tokens, no client-credentials grant), so the token itself is the
+  durable credential. Rotation is manual (see below).
 
-This replaced an earlier deploy-key + classic-PAT pair. One credential
-instead of two, it's read-only, it's scoped to exactly the repos the
-installations grant (a deploy key is single-repo; a classic PAT is
-account-wide), and it belongs to the app rather than to a person's account.
-GHCR accepts App installation tokens (unlike fine-grained PATs, which it
-still rejects).
+The token is stored in Barbican and the role renders it into the stock
+credential files git and podman read on their own, which is what lets
+`tedisc-deploy@<name>.timer` keep pulling long after the play has finished:
 
-Installations are per GitHub **account**: one app, installed on each account
-that owns instance repos, each installation granting the relevant repos.
-`dagster_github_app_installations` maps owner → installation id, and the
-owner is resolved per operation — git passes the repo path to the credential
-helper (`useHttpPath`), while podman only ever tells helpers the registry
-hostname, so each unit instance carries its image owner in a
-`GITHUB_APP_OWNER` environment drop-in instead (derived from the instance's
-repo URL, or set explicitly with `github_owner:`).
+- `~sa-container/.gitconfig` sets `credential.helper = store` for the Gitea
+  host, and `~sa-container/.git-credentials` (`0600`) holds the URL-encoded
+  `https://<user>:<token>@<host>` line. Nothing lands in `.git/config`.
+- `~sa-container/.docker/config.json` (`0600`) holds an `auths` entry for the
+  registry host — the same base64 `user:token` that `podman login` would
+  write, so there is no login step and nothing to redo after a reboot.
 
-The catch: installation tokens **expire after an hour**, and
-`tedisc-deploy@<name>.timer` re-pulls the repo and images on a schedule, long
-after the play has finished. So Ansible never installs a token. It installs
-the app's **private key** (from Barbican) plus a mint-and-cache script,
-`~sa-container/.local/bin/github-app-token`, and wires git and podman to call
-it *at pull time*:
-
-- `~sa-container/.gitconfig` sets a `credential.helper` for `github.com`, so
-  every HTTPS git operation — the play-time clone and the timer's later
-  pulls — fetches a fresh token. Nothing lands in `.git/config`.
-- `~sa-container/.docker/config.json` maps `ghcr.io` to a
-  `docker-credential-github-app` helper (a shim around the same script), so
-  every podman pull does likewise. Tokens are cached (`~/.cache/github-app/`,
-  `0600`) and re-minted when within 5 minutes of expiry.
-
-The instance repo's units and `deploy-update.sh` needed no changes — the
-helpers sit underneath the stock git/podman credential machinery. And since
-we have no root on this host (it's administered by UTAS; we only have the
-`sa-container` user), everything lives in that user's home. The one wrinkle:
-podman finds the `docker-credential-*` shim via the unit's `$PATH`, which by
-default excludes `~/.local/bin` — the role adds per-unit drop-ins
-(`~/.config/systemd/user/tedisc*@.service.d/`) that prepend it, leaving the
-shipped unit files untouched.
-
-### One-time setup
-
-1. Create the GitHub App (owner: the account that owns the repos): GitHub →
-   Settings → Developer settings → GitHub Apps → New GitHub App. Untick
-   **Webhook → Active** (no webhook), set Repository permissions **Contents:
-   Read-only** and **Packages: Read-only**, and restrict to "Only on this
-   account". Note the **App ID** from the app's settings page.
-
-2. Install the app on **each account that owns instance repos**, granting
-   **only** those repos (Install App → select repositories). Each
-   installation's ID is the trailing number in its URL
-   (`…/settings/installations/<id>`); adding a repo under an
-   already-installed account is just a checkbox on that page, no new IDs.
-
-3. Generate a private key (app settings page → Private keys), then store the
-   downloaded PEM in Barbican and delete the local copy:
-   ```bash
-   openstack secret store --name dagster_github_app_key \
-     --payload-content-type='text/plain' --payload "$(cat /tmp/tedisc-app.*.pem)"
-   shred -u /tmp/tedisc-app.*.pem
-   ```
-
-4. Make the packages private. Package visibility is **independent of the
-   repo** — making `TEDISC-Dagster` private did *not* make these private:
-   - `ghcr.io/eloisewm/tedisc-dagster/user-code`
-   - `ghcr.io/eloisewm/tedisc-dagster/dagster`
-
-   Installation tokens can pull a package when it's **connected to a repo the
-   installation covers** — true automatically for images pushed from Actions
-   with `GITHUB_TOKEN`; otherwise connect it under Package settings.
-
-5. Verify from your laptop before touching the playbook — this is the step
-   that catches a mis-granted installation or an unconnected package. Repeat
-   per installation if there's more than one:
-   ```bash
-   APP_ID=<id> INST_ID=<id> KEY=/tmp/tedisc-app.pem
-   b64() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
-   now=$(date +%s)
-   hdr=$(printf '{"alg":"RS256","typ":"JWT"}' | b64)
-   pay=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((now-60)) $((now+540)) "$APP_ID" | b64)
-   sig=$(printf '%s.%s' "$hdr" "$pay" | openssl dgst -sha256 -sign "$KEY" | b64)
-   TOKEN=$(curl -sf -X POST -H "Authorization: Bearer $hdr.$pay.$sig" \
-     "https://api.github.com/app/installations/$INST_ID/access_tokens" \
-     | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
-
-   git ls-remote "https://x-access-token:${TOKEN}@github.com/eloisewm/TEDISC-Dagster.git"
-   echo "$TOKEN" | podman login ghcr.io -u x-access-token --password-stdin
-   podman pull ghcr.io/eloisewm/tedisc-dagster/user-code:latest
-   ```
-
-6. Configure in `inventory/group_vars/all.yml` (repo URLs must be HTTPS —
-   installation tokens are HTTPS credentials):
-   ```yaml
-   dagster_github_app_id: "123456"
-   dagster_github_app_installations:
-     eloisewm: "12345678"
-     # another-owner: "23456789"   # app must be installed there too
-   dagster_github_app_key_secret_name: dagster_github_app_key
-
-   dagster_instances:
-     - name: ore
-       repo: https://github.com/eloisewm/TEDISC-Dagster.git
-       # github_owner: another-owner   # only if the images' owner differs
-       #                               # from the repo owner
-   ```
-
-Then run the playbook. On the host, `~/.local/bin/github-app-token token
-<owner>` (run as `sa-container`) prints a token for debugging; the owner
-argument is optional when only one installation is configured.
+The instance repo's units and `deploy-update.sh` need no changes — the files
+sit underneath the stock git/podman credential machinery, and since we have
+no root on this host (it's administered by UTAS; we only have the
+`sa-container` user), everything lives in that user's home. Unlike the
+previous GitHub App setup there are no helper scripts, no per-unit drop-ins,
+and no per-owner configuration: whatever the bot user can see, the host can
+pull.
 
 That `.docker` path on a podman host is deliberate. Rootless podman's default
 authfile is `${XDG_RUNTIME_DIR}/containers/auth.json`, under `/run/user/<uid>`
@@ -248,30 +161,82 @@ authfile is `${XDG_RUNTIME_DIR}/containers/auth.json`, under `/run/user/<uid>`
 needs no `REGISTRY_AUTH_FILE` plumbed into the systemd units (which ship from
 the instance repo, not this one).
 
+### One-time setup
+
+1. Create the bot user in Gitea (site admin → Users → Create, or
+   self-registration if enabled), e.g. `tedisc-deploy`. Give it a long random
+   password nobody needs to remember; it only ever authenticates by token.
+
+2. Grant it read access to every owner whose repos or images the instances
+   use. For an organisation: add it to a team with **Read** on the
+   **Code** and **Packages** units. For a personal account: add it as a
+   collaborator (Read) on each repo. Token scopes only restrict what
+   membership already grants, so this step is what actually opens the door.
+
+3. Issue an access token as that user: Settings → Applications → Generate
+   token, with scopes **`read:repository`** and **`read:package`** only.
+   Copy it once — Gitea never shows it again — and store it in Barbican:
+   ```bash
+   openstack secret store --name dagster_gitea_token \
+     --payload-content-type='text/plain' --payload '<token>'
+   ```
+
+4. Verify from your laptop before touching the playbook — this is the step
+   that catches a missing team membership or a wrong image path:
+   ```bash
+   HOST=<gitea-host> USER=tedisc-deploy TOKEN=<token>
+   git ls-remote "https://${USER}:${TOKEN}@${HOST}/IMASau/imas-ore.git"
+   echo "$TOKEN" | podman login "$HOST" -u "$USER" --password-stdin
+   podman pull "${HOST}/imasau/tedisc-dagster/user-code:latest"
+   podman logout "$HOST"
+   ```
+   Gitea lowercases the owner in image paths. Nested image names
+   (`owner/tedisc-dagster/user-code`) are supported by current Gitea; if the
+   pull 404s, try a flat name.
+
+5. Configure in `inventory/group_vars/all.yml` (repo URLs must be HTTPS):
+   ```yaml
+   dagster_registry: gitea.example.edu.au   # scopes both git and podman auth
+   dagster_gitea_user: tedisc-deploy
+   dagster_gitea_token_secret_name: dagster_gitea_token
+
+   dagster_instances:
+     - name: ore
+       repo: https://gitea.example.edu.au/IMASau/imas-ore.git
+       user_code_image: gitea.example.edu.au/imasau/tedisc-dagster/user-code:latest
+   ```
+
+Then run the playbook. The first run after the GitHub → Gitea cutover also
+removes the old GitHub App helper, shim, key and unit drop-ins from the host.
+
 ### Rotating
 
-App settings page → Private keys → generate a new key (both keys stay valid
-until one is deleted, so there's no gap), then:
+Gitea tokens don't expire, so rotation is a deliberate act. Generate a new
+token for the bot user (the old one stays valid until deleted, so there's no
+gap), then:
 ```bash
 openstack secret delete <old-href>
-openstack secret store --name dagster_github_app_key \
-  --payload-content-type='text/plain' --payload "$(cat /tmp/new.pem)"
+openstack secret store --name dagster_gitea_token \
+  --payload-content-type='text/plain' --payload '<new-token>'
 ```
-Re-run the playbook, confirm a pull works, then delete the old key on the app
-settings page. Revoking is immediate: delete the key there and every token it
-could mint dies with it (existing tokens expire within the hour regardless).
+Re-run the playbook, confirm a pull works, then delete the old token under
+the bot user's Settings → Applications. Revoking is immediate: delete the
+token there and both git and podman start failing on the next pull.
 
 ### Notes
 
-- Minting needs `api.github.com` reachable when the deploy timer fires; an
-  outage skips that run the same way a failed pull always has. The ≤1 h token
-  cache smooths transient blips.
-- The JWT the script signs is backdated 60 s against clock skew (GitHub
-  rejects future-dated JWTs); with systemd-timesyncd running this should
-  never matter.
-- `~sa-container/.docker/config.json` no longer contains any secret — just
-  the `credHelpers` wiring. The only durable secret on the host is the app's
-  PEM (`0600`, readable only by `sa-container`).
+- Pulls need the Gitea host reachable on 443 when the deploy timer fires; an
+  outage skips that run the same way a failed pull always has. There is no
+  separate API call to mint anything.
+- The token sits in two files on the host (`~/.git-credentials` and
+  `~/.docker/config.json`), both `0600` and readable only by `sa-container`.
+  Both are rendered from the one Barbican secret, so rotation is a single
+  play run. Keep the bot user strictly read-only so a leak of either file
+  only ever exposes read access.
+- Image builds and pushes happen in the instance repo's CI, not here. That
+  pipeline needs write access to the Gitea registry (Gitea Actions'
+  built-in token, or a second write-scoped token) — out of scope for this
+  repo.
 
 ## SSH access to the Nectar processing VM
 
