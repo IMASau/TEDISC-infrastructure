@@ -185,9 +185,9 @@ the instance repo, not this one).
    that catches a missing team membership or a wrong image path:
    ```bash
    HOST=<gitea-host> USER=tedisc-deploy TOKEN=<token>
-   git ls-remote "https://${USER}:${TOKEN}@${HOST}/IMASau/imas-ore.git"
+   git ls-remote "https://${USER}:${TOKEN}@${HOST}/IMAS/imas-ore.git"
    echo "$TOKEN" | podman login "$HOST" -u "$USER" --password-stdin
-   podman pull "${HOST}/imasau/tedisc-dagster/user-code:latest"
+   podman pull "${HOST}/imas/tedisc-dagster/user-code:latest"
    podman logout "$HOST"
    ```
    Gitea lowercases the owner in image paths. Nested image names
@@ -202,8 +202,8 @@ the instance repo, not this one).
 
    dagster_instances:
      - name: ore
-       repo: https://gitea.example.edu.au/IMASau/imas-ore.git
-       user_code_image: gitea.example.edu.au/imasau/tedisc-dagster/user-code:latest
+       repo: https://git.its.utas.edu.au/IMAS/imas-ore.git
+       user_code_image: git. its. utas.edu.au/imas/tedisc-dagster/user-code:latest
    ```
 
 Then run the playbook. The first run after the GitHub → Gitea cutover also

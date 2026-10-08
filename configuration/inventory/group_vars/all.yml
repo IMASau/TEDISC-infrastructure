@@ -124,13 +124,11 @@ dagster_instances:
     # HTTPS, not SSH (the Gitea host offers none). git reads the bot user's
     # stored credential at pull time, so no token is ever written into
     # .git/config on disk.
-    # FIXME: real Gitea host, and confirm the owner the repo and images
-    # land under in Gitea.
-    repo: https://gitea.example.edu.au/IMASau/imas-ore.git
+    repo: https://git.its.utas.edu.au/IMAS/imas-ore.git
     port: 3004
     subdomain: ore.dagster.ore-tedisc.cloud.edu.au
-    user_code_image: gitea.example.edu.au/imasau/tedisc-dagster/user-code:latest
-    dagster_image: gitea.example.edu.au/imasau/tedisc-dagster/dagster:latest
+    user_code_image: git.its.utas.edu.au/imas/tedisc-dagster/user_code:latest
+    dagster_image: git.its.utas.edu.au/imas/tedisc-dagster/dagster_server:latest
     env:
       BLA_FILEPATH: /opt/dagster/app/Datasets/BirdLifeAustralia/bla_output_csiro_290525.csv
       # FIXME: ALA?
