@@ -95,12 +95,11 @@ caddy_key_file: "/var/lib/lego/certificates/_.dagster.ore-tedisc.cloud.edu.au.ke
 # Barbican and rendered into the dagster user's ~/.git-credentials and
 # ~/.docker/config.json. One token covers every owner the bot user can see,
 # so there is no per-owner configuration.
-#
-# FIXME: fill in the Gitea hostname and bot username once the Gitea side is
-# set up. The play refuses to run while the host is empty. Repo URLs and
-# image paths below are written out in full and must use the same host.
-dagster_registry: ""
-dagster_gitea_user: "tedisc-deploy"
+
+# The play refuses to run while the host is empty. Repo URLs and image
+# paths below are written out in full and must use the same host.
+dagster_registry: "git.its.utas.edu.au"
+dagster_gitea_user: "mark_h"    # FIXME: needs a service/bot user
 dagster_gitea_token_secret_name: dagster_gitea_token
 
 dagster_user: sa-container
