@@ -4,5 +4,4 @@
   become: true
   become_user: sa-container
   roles:
-    - gh
     - dagster_instance

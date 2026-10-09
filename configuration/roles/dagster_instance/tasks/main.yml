@@ -93,25 +93,6 @@
   no_log: true
   when: dagster_gitea_token_secret_name | length > 0
 
-# --- Retire the GitHub App machinery ----------------------------------------
-# Until 2026-10 the host minted GitHub App installation tokens at pull time
-# via a helper script, a podman credential-helper shim, and per-unit PATH
-# drop-ins. None of that is wanted against Gitea. The drop-in directories
-# only ever held files this role wrote, so removing them whole is safe.
-# This block can be deleted once every managed host has run it.
-- name: Remove retired GitHub App artifacts
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  loop:
-    - "{{ dagster_home_dir }}/.config/github-app"
-    - "{{ dagster_home_dir }}/.cache/github-app"
-    - "{{ dagster_home_dir }}/.local/bin/github-app-token"
-    - "{{ dagster_home_dir }}/.local/bin/docker-credential-github-app"
-    - "{{ dagster_home_dir }}/.config/systemd/user/tedisc@.service.d"
-    - "{{ dagster_home_dir }}/.config/systemd/user/tedisc-deploy@.service.d"
-  notify: reload dagster user systemd
-
 # First pass: clone every instance's repo. The systemd unit files come from
 # one of these checkouts (they're identical across repos per the multi-
 # instance contract), so all clones must complete before we install them.
