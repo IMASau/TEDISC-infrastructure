@@ -126,8 +126,8 @@ dagster_instances:
     repo: https://git.its.utas.edu.au/IMAS/imas-ore.git
     port: 3004
     subdomain: ore.dagster.ore-tedisc.cloud.edu.au
-    user_code_image: git.its.utas.edu.au/imas/tedisc-dagster/user_code:latest
-    dagster_image: git.its.utas.edu.au/imas/tedisc-dagster/dagster_server:latest
+    user_code_image: git.its.utas.edu.au/imas/tedisc-dagster/user-code:latest
+    dagster_image: git.its.utas.edu.au/imas/tedisc-dagster/dagster:latest
     env:
       BLA_FILEPATH: /opt/dagster/app/Datasets/BirdLifeAustralia/bla_output_csiro_290525.csv
       # FIXME: ALA?
