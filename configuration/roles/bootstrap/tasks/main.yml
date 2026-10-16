@@ -26,3 +26,13 @@
     owner: root
     group: root
     mode: '0755'
+
+# The VLAN needs special handling (not sure why, probably just the
+# order multiple interfaces were brought up)
+- name: VLAN networking and routing configuration
+  ansible.builtin.template:
+    src: netplan.yaml.j2
+    dest: /etc/netplan/60-openstack.yaml
+    mode: '0600'
+    owner: root
+    group: root

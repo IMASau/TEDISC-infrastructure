@@ -1,0 +1,3 @@
+processing_vlan_ip: 10.2.226.140
+processing_vlan_gateway: 10.2.226.1
+dagster_vlan_ip: 10.242.10.4
