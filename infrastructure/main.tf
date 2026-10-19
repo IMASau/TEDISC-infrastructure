@@ -104,8 +104,12 @@ resource "openstack_compute_instance_v2" "vm" {
     ],
   )
 
+  # network {
+  #   uuid = openstack_networking_network_v2.vm.id
+  # }
+
   network {
-    uuid = openstack_networking_network_v2.vm.id
+    uuid = "ee216ebe-c426-4697-bbf9-d7ec1d7a4283"
   }
 
   # The subnet must be joined to the router before boot, otherwise DHCP and
