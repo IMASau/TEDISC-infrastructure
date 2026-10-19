@@ -129,31 +129,31 @@ data "openstack_networking_floatingip_v2" "vm" {
   address = var.floating_ip_address
 }
 
-# The neutron port nova created for the instance on the private network.
-data "openstack_networking_port_v2" "vm" {
-  device_id  = openstack_compute_instance_v2.vm.id
-  network_id = openstack_networking_network_v2.vm.id
-}
+# # The neutron port nova created for the instance on the private network.
+# data "openstack_networking_port_v2" "vm" {
+#   device_id  = openstack_compute_instance_v2.vm.id
+#   network_id = openstack_networking_network_v2.vm.id
+# }
 
-# Bind the floating IP to the instance's port.
-resource "openstack_networking_floatingip_associate_v2" "vm" {
-  floating_ip = data.openstack_networking_floatingip_v2.vm.address
-  port_id     = data.openstack_networking_port_v2.vm.id
-}
+# # Bind the floating IP to the instance's port.
+# resource "openstack_networking_floatingip_associate_v2" "vm" {
+#   floating_ip = data.openstack_networking_floatingip_v2.vm.address
+#   port_id     = data.openstack_networking_port_v2.vm.id
+# }
 
-# Optional Designate A records pointing at the floating IP. Turned on by
-# setting dns_zone_name and one or more entries in dns_hostnames.
-data "openstack_dns_zone_v2" "vm" {
-  count = var.dns_zone_name == "" ? 0 : 1
-  name  = var.dns_zone_name
-}
+# # Optional Designate A records pointing at the floating IP. Turned on by
+# # setting dns_zone_name and one or more entries in dns_hostnames.
+# data "openstack_dns_zone_v2" "vm" {
+#   count = var.dns_zone_name == "" ? 0 : 1
+#   name  = var.dns_zone_name
+# }
 
-resource "openstack_dns_recordset_v2" "vm" {
-  for_each    = var.dns_zone_name == "" ? toset([]) : toset(var.dns_hostnames)
-  zone_id     = data.openstack_dns_zone_v2.vm[0].id
-  name        = "${each.value}.${var.dns_zone_name}"
-  description = "A record for ${var.instance_name}"
-  ttl         = var.dns_ttl
-  type        = "A"
-  records     = [data.openstack_networking_floatingip_v2.vm.address]
-}
+# resource "openstack_dns_recordset_v2" "vm" {
+#   for_each    = var.dns_zone_name == "" ? toset([]) : toset(var.dns_hostnames)
+#   zone_id     = data.openstack_dns_zone_v2.vm[0].id
+#   name        = "${each.value}.${var.dns_zone_name}"
+#   description = "A record for ${var.instance_name}"
+#   ttl         = var.dns_ttl
+#   type        = "A"
+#   records     = [data.openstack_networking_floatingip_v2.vm.address]
+# }
