@@ -1,6 +1,8 @@
 ---
 # Ubuntu's own archive lags R badly — noble/universe is on 4.3.3 against
 # CRAN's 4.6.x — so R comes from CRAN's apt repo rather than the distro.
+# Everything CRAN-shaped is fetched via r_lang_cran_mirror: cloud.r-project.org
+# itself is blocked by the firewall.
 
 - name: Ensure prerequisites for adding the CRAN repo are installed
   ansible.builtin.apt:
@@ -19,12 +21,14 @@
   ansible.builtin.deb822_repository:
     name: cran
     types: [deb]
-    uris: https://cloud.r-project.org/bin/linux/ubuntu
+    uris: "{{ r_lang_cran_mirror }}/bin/linux/ubuntu"
     # Trailing slash is load-bearing: CRAN publishes this as a flat repo, so
     # the suite is a literal path and there are no components.
     # -cran40 covers the whole R 4.x series, not one minor version.
     suites: "{{ ansible_distribution_release }}-cran40/"
-    signed_by: https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc
+    # The module downloads the key *from the target host*, so this must be
+    # reachable through the firewall too.
+    signed_by: "{{ r_lang_cran_mirror }}/bin/linux/ubuntu/marutter_pubkey.asc"
     state: present
     enabled: true
   register: r_lang_cran_repo
@@ -48,9 +52,11 @@
     name: "{{ r_lang_build_deps }}"
     state: present
 
+# Without a site-wide repos option every install.packages() call would stop to
+# ask for a mirror (non-interactively it just fails), so always write one.
 # Posit only hands back binaries when the user agent identifies R and the
 # platform — without HTTPUserAgent you silently get source tarballs instead.
-- name: Point install.packages() at Posit's binary builds
+- name: Point install.packages() at the CRAN mirror (or Posit's binary builds)
   ansible.builtin.copy:
     dest: /etc/R/Rprofile.site
     owner: root
@@ -58,14 +64,17 @@
     mode: '0644'
     content: |
       options(
+      {% if r_lang_use_posit_binaries %}
         repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/{{ ansible_distribution_release }}/latest"),
         HTTPUserAgent = sprintf(
           "R/%s R (%s)",
           getRversion(),
           paste(getRversion(), R.version["platform"], R.version["arch"], R.version["os"])
         )
+      {% else %}
+        repos = c(CRAN = "{{ r_lang_cran_mirror }}/")
+      {% endif %}
       )
-  when: r_lang_use_posit_binaries
 
 - name: Install R libraries
   ansible.builtin.command:

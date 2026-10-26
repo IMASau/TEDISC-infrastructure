@@ -21,7 +21,14 @@ r_lang_build_deps:
   - libtiff5-dev
   - libjpeg-dev
 
+# The VM's firewall only lets a handful of hosts out. AARNet mirrors the whole
+# CRAN tree, so both the R apt repo (bin/linux/ubuntu) and install.packages()
+# source tarballs come from here. No trailing slash.
+r_lang_cran_mirror: "https://mirror.aarnet.edu.au/pub/CRAN"
+
 # Posit's package manager serves prebuilt Ubuntu binaries, sparing this VM
-# from compiling every install.packages() call from source. Set to false to
-# fall back to stock CRAN and source builds.
-r_lang_use_posit_binaries: true
+# from compiling every install.packages() call from source. Off by default:
+# packagemanager.posit.co is not on the firewall allow-list, so packages are
+# built from source via r_lang_cran_mirror instead. Flip to true if Posit is
+# ever permitted.
+r_lang_use_posit_binaries: false

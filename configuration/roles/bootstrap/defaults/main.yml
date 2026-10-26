@@ -1,3 +1,9 @@
+# The processing VM sits behind a firewall that only allows a short list of
+# hosts out. AARNet's mirror carries the full Ubuntu archive (including the
+# -security suite), so every pocket points there instead of the upstream
+# archive.ubuntu.com / security.ubuntu.com pair the image ships with.
+bootstrap_apt_mirror: "https://mirror.aarnet.edu.au/pub/ubuntu/archive"
+
 processing_vlan_ip: 10.2.226.149
 processing_vlan_gateway: 10.2.226.1
 dagster_vlan_ip: 10.242.10.4

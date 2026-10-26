@@ -3,6 +3,46 @@
 # any other role can safely run. Kept intentionally tiny — actual services
 # live in their own roles.
 
+# Must come first: nothing below (or in any later role) can apt-get anything
+# until the sources point at a host the firewall lets through. Written with
+# `copy` rather than `deb822_repository` because the latter needs
+# python3-debian, which we can't install until apt works.
+- name: Point apt at the permitted Ubuntu mirror
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/ubuntu.sources
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Managed by Ansible (bootstrap role). Upstream archive.ubuntu.com and
+      # security.ubuntu.com are blocked by the firewall; the mirror carries
+      # all four pockets.
+      Types: deb
+      URIs: {{ bootstrap_apt_mirror }}
+      Suites: {{ ansible_distribution_release }} {{ ansible_distribution_release }}-updates {{ ansible_distribution_release }}-backports {{ ansible_distribution_release }}-security
+      Components: main restricted universe multiverse
+      Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+  register: bootstrap_apt_sources
+
+# Noble images ship a comment-only sources.list that defers to ubuntu.sources,
+# but older images (and some cloud-init datasources) still populate it with
+# upstream URLs. Blank it so there is exactly one source of truth.
+- name: Neutralise the legacy sources.list
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Managed by Ansible (bootstrap role). Ubuntu sources live in
+      # /etc/apt/sources.list.d/ubuntu.sources
+  register: bootstrap_apt_sources_legacy
+
+- name: Refresh apt cache after changing the mirror
+  ansible.builtin.apt:
+    update_cache: true
+  when: bootstrap_apt_sources.changed or bootstrap_apt_sources_legacy.changed
+
 - name: Ensure Ansible prerequisites are installed
   ansible.builtin.apt:
     name:
