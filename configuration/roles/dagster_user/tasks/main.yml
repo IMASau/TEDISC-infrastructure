@@ -7,6 +7,13 @@
     create_home: true
     state: present
 
+- name: Add authorised keys
+  ansible.posix.authorized_key:
+    user: "{{ dagster_user }}"
+    state: present
+    key: "{{ item }}"
+  loop: "{{ dagster_user_authorized_keys }}"
+
 # `loginctl enable-linger` creates /var/lib/systemd/linger/<user> as a side
 # effect *and* notifies systemd-logind so it starts user@<uid>.service
 # immediately, without waiting for a reboot. The `creates:` guard makes this

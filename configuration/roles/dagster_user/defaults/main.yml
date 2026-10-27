@@ -2,6 +2,10 @@
 dagster_user: dagster
 dagster_user_shell: /bin/bash
 
+dagster_user_authorized_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIhmVEgOtBerrLilRHe0WD/RERg7smu/lPTR+6PYwloM mark@x1carbon"
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINkGg6jLCMqqEHrTxvD4QmOfUysw5VNS9P1BF22dLrTz eloisewilsonmayne@gmail.com"
+
 # Subordinate UID/GID range for rootless podman. `useradd --system` skips
 # this allocation, so we do it explicitly. The range is chosen well above
 # Ubuntu's default auto-allocation window (100000 upwards) to avoid
