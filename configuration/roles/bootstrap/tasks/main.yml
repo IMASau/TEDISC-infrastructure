@@ -3,6 +3,30 @@
 # any other role can safely run. Kept intentionally tiny — actual services
 # live in their own roles.
 
+# - name: Bootstrap MTU fix to enable apt repository
+#   ansible.builtin.command:
+#     cmd: "ip link set dev {{ network_interface }} mtu {{ network_mtu }}"
+#   changed_when: false
+
+- name: Fix Network MTU
+  ansible.builtin.copy:
+    dest: /etc/netplan/99-fix-mtu.yaml
+    owner: root
+    group: root
+    mode: '0600'
+    content: |
+      network:
+        version: 2
+        ethernets:
+          eth0:
+            mtu: 1450
+  register: mtu_update
+
+- name: Update network config
+  ansible.builtin.shell:
+    cmd: netplan apply
+  when: mtu_update.changed
+
 # Must come first: nothing below (or in any later role) can apt-get anything
 # until the sources point at a host the firewall lets through. Written with
 # `copy` rather than `deb822_repository` because the latter needs

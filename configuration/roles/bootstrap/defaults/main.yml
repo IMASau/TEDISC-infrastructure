@@ -4,6 +4,9 @@
 # archive.ubuntu.com / security.ubuntu.com pair the image ships with.
 bootstrap_apt_mirror: "https://mirror.aarnet.edu.au/pub/ubuntu/archive"
 
+network_interface: eth0
+network_mtu: 1450
+
 processing_vlan_ip: 10.2.226.149
 processing_vlan_gateway: 10.2.226.1
 dagster_vlan_ip: 10.242.10.4
