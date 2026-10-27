@@ -38,6 +38,11 @@
       # /etc/apt/sources.list.d/ubuntu.sources
   register: bootstrap_apt_sources_legacy
 
+- name: Neutralise the legacy sources.list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/ubuntu.list
+    state: absent
+
 - name: Refresh apt cache after changing the mirror
   ansible.builtin.apt:
     update_cache: true
