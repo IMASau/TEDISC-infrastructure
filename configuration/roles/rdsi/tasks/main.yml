@@ -12,3 +12,5 @@
   ansible.builtin.lineinfile:
     path: /etc/fstab
     line: "{{ rdsi_nfs_server }}:{{ rdsi_nfs_folder }} /mnt/rdsi nfs rw,nosuid,noexec,nodev,hard,intr,bg,proto=tcp 0 0"
+    regexp: /mnt/rdsi
+    state: present
