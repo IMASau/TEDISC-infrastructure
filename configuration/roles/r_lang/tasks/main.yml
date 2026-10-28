@@ -99,8 +99,8 @@
     argv:
       - Rscript
       - -e
-      - remotes::install_github("{{ item }}")
+      - remotes::install_git("{{ item }}")
     # item format is username/package but it only *creates* "package":
     creates: "/usr/local/lib/R/site-library/{{ item | split('/') | last }}"
-  loop: "{{ r_lang_github_packages }}"
-  when: r_lang_github_packages is defined
+  loop: "{{ r_lang_git_packages }}"
+  when: r_lang_git_packages is defined
