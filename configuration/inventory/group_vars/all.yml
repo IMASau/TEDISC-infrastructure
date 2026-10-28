@@ -136,7 +136,7 @@ dagster_instances:
       DB_PORT: '1433'
       DB_NAME: IMASOREMonitoring
       DB_DRIVER: ODBC Driver 18 for SQL Server
-      NECTAR_INSTANCE_IP: "131.217.169.160"  # tedisc-vm floating IP
+      NECTAR_INSTANCE_IP: "10.2.226.149"  # tedisc-vm VLAN
       NECTAR_SSH_USER: "{{ processing_user }}"
       # In-container path to the private key the dagster_instance role writes
       # next to this instance's checkout.
