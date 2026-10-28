@@ -94,7 +94,7 @@
     creates: "/usr/local/lib/R/site-library/remotes"
   when: r_lang_github_packages is defined
 
-- name: Install R packages from github
+- name: Install R packages from git
   ansible.builtin.command:
     argv:
       - Rscript
