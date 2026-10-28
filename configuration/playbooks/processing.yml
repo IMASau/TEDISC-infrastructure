@@ -4,6 +4,7 @@
   become: true
   roles:
     - bootstrap
+    - odbc
     - processing_user
     - rdsi
     - r_lang

@@ -1,0 +1,48 @@
+---
+# See defaults/main.yml for why this sideloads a .deb instead of adding
+# Microsoft's apt repo.
+
+- name: Ensure the controller-side download cache exists
+  ansible.builtin.file:
+    path: "{{ msodbc_local_cache }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+# Runs on the controller, which (unlike the VM) can reach Microsoft.
+- name: Download msodbcsql18 on the controller
+  ansible.builtin.get_url:
+    url: "{{ msodbc_url }}"
+    dest: "{{ msodbc_local_cache }}/{{ msodbc_deb }}"
+    checksum: "{{ msodbc_checksum }}"
+    mode: '0644'
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Copy msodbcsql18 to the host
+  ansible.builtin.copy:
+    src: "{{ msodbc_local_cache }}/{{ msodbc_deb }}"
+    dest: "/var/cache/apt/archives/{{ msodbc_deb }}"
+    owner: root
+    group: root
+    mode: '0644'
+
+# `deb:` installs the local file and pulls its dependencies through apt, so
+# they come from the mirror configured in bootstrap. The preinst aborts
+# without an accepted EULA; ACCEPT_EULA=Y is Microsoft's documented
+# non-interactive opt-in.
+- name: Install msodbcsql18
+  ansible.builtin.apt:
+    deb: "/var/cache/apt/archives/{{ msodbc_deb }}"
+  environment:
+    ACCEPT_EULA: "Y"
+
+# Header needed to compile the R `odbc` package (and anything else that
+# links against unixODBC) from source.
+- name: Install unixODBC development headers
+  ansible.builtin.apt:
+    name: unixodbc-dev
+    state: present

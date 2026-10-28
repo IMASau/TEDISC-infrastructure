@@ -1,0 +1,21 @@
+---
+# Microsoft's ODBC driver for SQL Server. The normal route (install the
+# packages-microsoft-prod repo package, then apt) needs packages.microsoft.com
+# reachable from the VM, which the firewall blocks and AARNet does not mirror.
+# Instead the controller downloads the single .deb and copies it across; its
+# dependencies (unixodbc, odbcinst, libkrb5-3, ...) are all in the Ubuntu
+# archive, so apt resolves them from the permitted mirror.
+#
+# To bump: pick a version from
+#   https://packages.microsoft.com/ubuntu/24.04/prod/pool/main/m/msodbcsql18/
+# and recompute the checksum with `sha256sum` on the downloaded file. The
+# checksum stands in for the repo signature we lose by sideloading, so keep
+# it pinned rather than blank.
+msodbc_version: "18.7.1.1-1"
+msodbc_checksum: "sha256:f506cb3de8b34cd94e9014d247b39e9dfd7effad79edad3ab67096dc3c1b6b0e"
+
+msodbc_deb: "msodbcsql18_{{ msodbc_version }}_amd64.deb"
+msodbc_url: "https://packages.microsoft.com/ubuntu/{{ ansible_distribution_version }}/prod/pool/main/m/msodbcsql18/{{ msodbc_deb }}"
+
+# Where the controller keeps the downloaded .deb between runs (gitignored).
+msodbc_local_cache: "{{ playbook_dir }}/../.cache"
