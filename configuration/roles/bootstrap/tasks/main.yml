@@ -27,6 +27,12 @@
     cmd: netplan apply
   when: mtu_update.changed
 
+- name: Populate authorized_keys for access
+  ansible.posix.authorized_key:
+    key: "{{ item }}"
+    user: "{{ ansible_user }}"
+  loop: "{{ bootstrap_authorized_keys }}"
+
 # Must come first: nothing below (or in any later role) can apt-get anything
 # until the sources point at a host the firewall lets through. Written with
 # `copy` rather than `deb822_repository` because the latter needs

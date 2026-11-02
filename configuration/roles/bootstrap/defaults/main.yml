@@ -4,6 +4,11 @@
 # archive.ubuntu.com / security.ubuntu.com pair the image ships with.
 bootstrap_apt_mirror: "https://mirror.aarnet.edu.au/pub/ubuntu/archive"
 
+bootstrap_authorized_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINkGg6jLCMqqEHrTxvD4QmOfUysw5VNS9P1BF22dLrTz eloisewilsonmayne@gmail.com
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIhmVEgOtBerrLilRHe0WD/RERg7smu/lPTR+6PYwloM mark@x1carbon
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMn7R2HoxE3xfRElnMQQxtjm3wk1UlIzCSI4jQtOw3Fq eiwilson@mgmt-imas.its.utas.edu.au
+
 network_interface: eth0
 network_mtu: 1450
 
